@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: breathewise-backend
+    env: node
+    plan: free
+    rootDir: server
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: PORT
+        value: 5000
+      - key: NODE_VERSION
+        value: 20
+      - key: OPENAQ_API_KEY
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: OPENAQ_TIMEOUT_MS
+        value: 10000
