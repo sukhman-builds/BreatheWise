@@ -1,155 +1,314 @@
-export default function ForecastView() {
+
+import { useEffect, useState } from 'react';
+import { API_BASE_URL } from '../config';
+
+function ForecastChart({ title, data, dataKey, unit }) {
+  const values = data
+    .map(item => item[dataKey])
+    .filter(value => Number.isFinite(value));
+
+  const maxValue = Math.max(...values, 1);
+
+  return (
+    <div className="panel" style={{ padding: '20px', minWidth: 0 }}>
+      <h3>{title}</h3>
+      <p className="muted">Hourly forecast · {unit}</p>
+
+      {data.length === 0 ? (
+        <p>No future forecast data available.</p>
+      ) : (
+        <div style={{
+          display: 'flex',
+          alignItems: 'flex-end',
+          gap: '5px',
+          height: '190px',
+          paddingTop: '20px',
+          overflowX: 'auto'
+        }}>
+          {data.map((item, index) => {
+            const value = item[dataKey];
+            const valid = Number.isFinite(value);
+            const height = valid ? Math.max((value / maxValue) * 100, 3) : 0;
+
+            return (
+              <div
+                key={`${item.time}-${index}`}
+                title={`${item.time} · ${valid ? `${value} ${unit}` : 'Unavailable'}`}
+                style={{
+                  flex: '1 0 18px',
+                  minWidth: '18px',
+                  height: '100%',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'flex-end',
+                  alignItems: 'center',
+                  gap: '5px'
+                }}
+              >
+                <div style={{
+                  width: '100%',
+                  height: `${height}%`,
+                  minHeight: valid ? '3px' : '0',
+                  background: '#00897b',
+                  borderRadius: '5px 5px 0 0'
+                }} />
+
+                {index % 4 === 0 && (
+                  <small style={{ fontSize: '10px', whiteSpace: 'nowrap' }}>
+                    {new Date(item.time).toLocaleTimeString('en-IN', {
+                      hour: '2-digit',
+                      hour12: false,
+                      timeZone: 'Asia/Kolkata'
+                    })}
+                  </small>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function ForecastView({
+  latitude,
+  longitude,
+  stationName
+}) {
+  const [forecast, setForecast] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [now, setNow] = useState(() => Date.now());
+
+  const hasValidCoordinates =
+    latitude != null &&
+    longitude != null &&
+    Number.isFinite(Number(latitude)) &&
+    Number.isFinite(Number(longitude));
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 60000);
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    if (!hasValidCoordinates) return;
+
+    const controller = new AbortController();
+
+    async function loadForecast() {
+      setLoading(true);
+      setError('');
+
+      try {
+        const params = new URLSearchParams({
+          latitude: String(latitude),
+          longitude: String(longitude)
+        });
+
+        const response = await fetch(
+          `${API_BASE_URL}/api/forecast?${params}`,
+          { signal: controller.signal }
+        );
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.error || 'Unable to load forecast.');
+        }
+
+        setForecast(result);
+      } catch (err) {
+        if (err.name !== 'AbortError') {
+          setError(err.message || 'Forecast request failed.');
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
+      }
+    }
+
+    loadForecast();
+
+    return () => controller.abort();
+  }, [latitude, longitude, refreshKey, hasValidCoordinates]);
+
+  const futureHours = (forecast?.hourly || [])
+    .filter(item => new Date(item.time).getTime() >= now)
+    .slice(0, 24);
+
+  const nextHour = futureHours[0];
+
+  const maxUsAqi = futureHours.reduce((max, item) => {
+    return Number.isFinite(item.usAqi)
+      ? Math.max(max, item.usAqi)
+      : max;
+  }, 0);
+
   return (
     <div className="forecast-view">
       <div className="section-heading">
         <div>
-          <h2>Air Quality Forecast Status</h2>
-          <p>Scientific transparency and data integrity declaration</p>
-        </div>
-      </div>
-
-      {/* Honest Unavailable State Hero Card */}
-      <div className="forecast-hero-card">
-        <div className="forecast-hero-icon">☼</div>
-        <div className="forecast-hero-content">
-          <span className="forecast-status-tag">STATUS: HONEST DISCLOSURE</span>
-          <h3>Air Quality Forecast Currently Unavailable</h3>
-          <p className="forecast-lead">
-            BreatheWise does not show synthetic or simulated future air quality forecasts because
-            <strong> no verified, open forecast model is integrated into this data pipeline.</strong>
-          </p>
-          <p className="forecast-sub">
-            Our data provider, <strong>OpenAQ v3</strong>, is an observational global repository that archives
-            direct physical measurements reported by government and research ground stations.
-            OpenAQ does not generate mathematical predictive forecasts.
+          <h2>Air Quality Forecast</h2>
+          <p>
+            Model-based hourly outlook for {stationName || 'selected station'}
           </p>
         </div>
+
+        <button
+          type="button"
+          className="btn-sm"
+          onClick={() => setRefreshKey(value => value + 1)}
+          disabled={loading || !hasValidCoordinates}
+        >
+          {loading ? 'Loading...' : '↻ Refresh Forecast'}
+        </button>
       </div>
 
-      {/* Why We Refuse to Fabricate Forecasts */}
-      <div className="panel data-integrity-panel">
-        <div className="section-heading">
-          <div>
-            <h3>Why We Never Fabricate Pollution Predictions</h3>
-            <p>Our commitment to rigorous scientific pair-programming standards</p>
-          </div>
+      {!hasValidCoordinates ? (
+        <div className="panel" style={{ padding: '25px' }}>
+          <h3>Forecast unavailable</h3>
+          <p>Monitoring station coordinates are not available yet.</p>
         </div>
+      ) : loading ? (
+        <div className="panel" style={{ padding: '30px' }}>
+          <p>Loading atmospheric forecast...</p>
+        </div>
+      ) : error ? (
+        <div className="panel" style={{ padding: '25px' }}>
+          <h3>Forecast unavailable</h3>
+          <p>{error}</p>
+          <button
+            type="button"
+            className="btn-sm"
+            onClick={() => setRefreshKey(value => value + 1)}
+          >
+            Try Again
+          </button>
+        </div>
+      ) : (
+        <>
+          <div className="forecast-hero-card">
+            <div className="forecast-hero-icon">☼</div>
+            <div className="forecast-hero-content">
+              <span className="forecast-status-tag">
+                MODEL-BASED FORECAST
+              </span>
+              <h3>Next 24 Hours Outlook</h3>
+              <p className="forecast-lead">
+                Forecast estimates from Open-Meteo atmospheric models.
+                These are not direct ground-station measurements or official
+                CPCB AQI readings.
+              </p>
+            </div>
+          </div>
 
-        <div className="integrity-grid">
-          <div className="integrity-card">
-            <span className="integrity-number">01</span>
-            <h4>Physical Safety</h4>
+          <div className="pollutant-grid" style={{ marginTop: '20px' }}>
+            <div className="pollutant-card">
+              <span className="pollutant-name">Next-hour PM2.5</span>
+              <h3>
+                {nextHour?.pm25 ?? '—'}
+                <small> µg/m³</small>
+              </h3>
+              <p>Modelled particulate concentration</p>
+            </div>
+
+            <div className="pollutant-card">
+              <span className="pollutant-name">Next-hour PM10</span>
+              <h3>
+                {nextHour?.pm10 ?? '—'}
+                <small> µg/m³</small>
+              </h3>
+              <p>Modelled particulate concentration</p>
+            </div>
+
+            <div className="pollutant-card">
+              <span className="pollutant-name">Next-hour US AQI</span>
+              <h3>{nextHour?.usAqi ?? '—'}</h3>
+              <p>US AQI scale, not Indian CPCB AQI</p>
+            </div>
+
+            <div className="pollutant-card">
+              <span className="pollutant-name">Peak forecast US AQI</span>
+              <h3>{maxUsAqi || '—'}</h3>
+              <p>Highest available value in the next 24 hours</p>
+            </div>
+          </div>
+
+          <div className="section-heading" style={{ marginTop: '25px' }}>
+            <div>
+              <h2>Hourly Forecast Charts</h2>
+              <p>Future hours only · Indian Standard Time (IST)</p>
+            </div>
+          </div>
+
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+            gap: '18px'
+          }}>
+            <ForecastChart
+              title="PM2.5 Forecast"
+              data={futureHours}
+              dataKey="pm25"
+              unit="µg/m³"
+            />
+
+            <ForecastChart
+              title="PM10 Forecast"
+              data={futureHours}
+              dataKey="pm10"
+              unit="µg/m³"
+            />
+
+            <ForecastChart
+              title="US AQI Forecast"
+              data={futureHours}
+              dataKey="usAqi"
+              unit="US AQI"
+            />
+          </div>
+
+          <div className="panel" style={{ padding: '20px', marginTop: '20px' }}>
+            <h3>Forecast Data Transparency</h3>
+            <p><strong>Provider:</strong> Open-Meteo</p>
+            <p><strong>Model:</strong> CAMS-based air quality forecast</p>
+            <p><strong>Location:</strong> {stationName}</p>
+            <p><strong>Timezone:</strong> Asia/Kolkata (IST)</p>
             <p>
-              Fabricating a "Good" forecast when severe meteorological stagnation is looming could lead sensitive individuals,
-              asthmatics, or outdoor runners to make hazardous exposure decisions.
+              <strong>Retrieved:</strong>{' '}
+              {forecast?.fetchedAt
+                ? new Date(forecast.fetchedAt).toLocaleString('en-IN', {
+                    timeZone: 'Asia/Kolkata'
+                  })
+                : '—'}
+            </p>
+            <p>
+              <strong>Forecast points displayed:</strong> {futureHours.length}
+            </p>
+
+            <p className="muted">
+              Open-Meteo forecast values are model estimates. Spatial resolution
+              is limited and local station conditions may differ. US AQI values
+              must not be interpreted as official Indian CPCB AQI.
+            </p>
+
+            <p>
+              Source:{' '}
+              <a
+                href="https://open-meteo.com/en/docs/air-quality-api"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Open-Meteo Air Quality API
+              </a>
             </p>
           </div>
-
-          <div className="integrity-card">
-            <span className="integrity-number">02</span>
-            <h4>Atmospheric Complexity</h4>
-            <p>
-              True particulate forecasting requires coupled Chemical Transport Models (such as WRF-Chem or GEOS-Chem),
-              assimilating real-time boundary layer height, wind trajectories, and satellite aerosol optical depth (AOD).
-            </p>
-          </div>
-
-          <div className="integrity-card">
-            <span className="integrity-number">03</span>
-            <h4>Zero Hallucinations</h4>
-            <p>
-              Many air quality apps display arbitrary algorithmic extrapolations or mock numbers under the guise of "AI Forecasts".
-              BreatheWise strictly adheres to authentic observational ground truth.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* How Authentic Forecasts Are Modeled */}
-      <div className="panel forecast-education-panel">
-        <div className="section-heading">
-          <div>
-            <h3>How Authentic Atmospheric Forecasting Works</h3>
-            <p>The multi-stage scientific pipeline required for reliable predictive modeling</p>
-          </div>
-        </div>
-
-        <div className="steps-flow">
-          <div className="flow-step">
-            <span className="step-circle">1</span>
-            <div className="step-content">
-              <strong>Ground Observations</strong>
-              <p>Continuous particulate mass and precursor gas sensors (OpenAQ, CPCB, US EPA).</p>
-            </div>
-          </div>
-          <div className="flow-arrow">→</div>
-          <div className="flow-step">
-            <span className="step-circle">2</span>
-            <div className="step-content">
-              <strong>Satellite Remote Sensing</strong>
-              <p>Aerosol Optical Depth (AOD) from NASA MODIS, VIIRS, and ESA Sentinel-5P.</p>
-            </div>
-          </div>
-          <div className="flow-arrow">→</div>
-          <div className="flow-step">
-            <span className="step-circle">3</span>
-            <div className="step-content">
-              <strong>Meteorological Coupling</strong>
-              <p>Planetary boundary layer height, wind velocity fields, humidity, and temperature inversions.</p>
-            </div>
-          </div>
-          <div className="flow-arrow">→</div>
-          <div className="flow-step">
-            <span className="step-circle">4</span>
-            <div className="step-content">
-              <strong>Chemical Transport Models</strong>
-              <p>WRF-Chem / CMAQ simulations computing physical dispersion and aerosol chemistry.</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Official External Resources */}
-      <div className="panel official-sources-panel">
-        <div className="section-heading">
-          <div>
-            <h3>Official Certified Forecasting Portals</h3>
-            <p>Consult authoritative government agencies for operational multi-day air quality outlooks</p>
-          </div>
-        </div>
-
-        <div className="sources-list">
-          <div className="source-item">
-            <div className="source-info">
-              <strong>SAFAR-India (System of Air Quality and Weather Forecasting And Research)</strong>
-              <p>Operated by the Ministry of Earth Sciences (MoES) and Indian Institute of Tropical Meteorology (IITM), Pune. Provides certified 1-to-3 day high-resolution city forecasts for Delhi-NCR, Pune, Mumbai, and Ahmedabad.</p>
-            </div>
-            <a href="https://safar.tropmet.res.in" target="_blank" rel="noopener noreferrer" className="btn-external">
-              Visit SAFAR Portal ↗
-            </a>
-          </div>
-
-          <div className="source-item">
-            <div className="source-info">
-              <strong>India Meteorological Department (IMD) - Air Quality Early Warning System (AQEWS)</strong>
-              <p>Operational numerical forecast model designed to anticipate particulate surges, stubble burning smoke trajectories, and severe smog events across Northern India.</p>
-            </div>
-            <a href="https://mausam.imd.gov.in" target="_blank" rel="noopener noreferrer" className="btn-external">
-              Visit IMD Early Warning ↗
-            </a>
-          </div>
-
-          <div className="source-item">
-            <div className="source-info">
-              <strong>Copernicus Atmosphere Monitoring Service (CAMS)</strong>
-              <p>European Centre for Medium-Range Weather Forecasts (ECMWF) global atmospheric composition and aerosol forecasts based on satellite data assimilation.</p>
-            </div>
-            <a href="https://atmosphere.copernicus.eu" target="_blank" rel="noopener noreferrer" className="btn-external">
-              Visit Copernicus CAMS ↗
-            </a>
-          </div>
-        </div>
-      </div>
+        </>
+      )}
     </div>
   );
 }

@@ -16,7 +16,7 @@ if (!API_KEY) {
 }
 
 // Allowed CORS origins
-const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:5173,http://127.0.0.1:5173')
+const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174')
   .split(',')
   .map(o => o.trim())
   .filter(Boolean);
@@ -404,6 +404,118 @@ app.get('/api/ambala-stations', async (req, res, next) => {
 
   } catch (err) {
     next(err);
+  }
+});
+
+
+// 7. Fetch model-based air quality forecast from Open-Meteo
+app.get('/api/forecast', async (req, res) => {
+  const latitude = Number(req.query.latitude);
+  const longitude = Number(req.query.longitude);
+
+  // Validate coordinates
+  if (
+    req.query.latitude === undefined ||
+    req.query.longitude === undefined ||
+    !Number.isFinite(latitude) ||
+    !Number.isFinite(longitude) ||
+    latitude < -90 || latitude > 90 ||
+    longitude < -180 || longitude > 180
+  ) {
+    return res.status(400).json({
+      error: 'Valid latitude and longitude are required.',
+      code: 'INVALID_COORDINATES'
+    });
+  }
+
+  const cacheKey = `forecast:${latitude.toFixed(4)},${longitude.toFixed(4)}`;
+  const cached = getFromCache(cacheKey);
+
+  if (cached) {
+    return res.json(cached.data);
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15000);
+
+  try {
+    const params = new URLSearchParams({
+      latitude: String(latitude),
+      longitude: String(longitude),
+      hourly: 'pm2_5,pm10,us_aqi',
+      forecast_days: '2',
+      timezone: 'Asia/Kolkata'
+    });
+
+    const url = `https://air-quality-api.open-meteo.com/v1/air-quality?${params}`;
+
+    const response = await fetch(url, {
+      headers: { Accept: 'application/json' },
+      signal: controller.signal
+    });
+
+    if (!response.ok) {
+      const err = new Error('Forecast provider is temporarily unavailable.');
+      err.status = 502;
+      err.code = 'FORECAST_PROVIDER_ERROR';
+      throw err;
+    }
+
+    const data = await response.json();
+
+    if (
+      !data.hourly ||
+      !Array.isArray(data.hourly.time) ||
+      !Array.isArray(data.hourly.pm2_5) ||
+      !Array.isArray(data.hourly.pm10) ||
+      !Array.isArray(data.hourly.us_aqi)
+    ) {
+      const err = new Error('Forecast data is incomplete.');
+      err.status = 502;
+      err.code = 'INVALID_FORECAST_DATA';
+      throw err;
+    }
+
+    const forecast = {
+      source: 'Open-Meteo',
+      model: 'CAMS-based air quality forecast',
+      forecastType: 'Modelled forecast, not ground-station measurement',
+      coordinates: { latitude, longitude },
+      timezone: data.timezone || 'Asia/Kolkata',
+      units: {
+        pm2_5: 'µg/m³',
+        pm10: 'µg/m³',
+        us_aqi: 'US AQI'
+      },
+      hourly: data.hourly.time.map((time, index) => ({
+        time,
+        pm25: data.hourly.pm2_5[index] ?? null,
+        pm10: data.hourly.pm10[index] ?? null,
+        usAqi: data.hourly.us_aqi[index] ?? null
+      })),
+      fetchedAt: new Date().toISOString()
+    };
+
+    setInCache(cacheKey, forecast, forecast.fetchedAt, 1800000);
+    res.json(forecast);
+
+  } catch (err) {
+    console.error('[Forecast Error]:', err.message);
+
+    if (err.name === 'AbortError') {
+      return res.status(504).json({
+        error: 'Forecast request timed out. Please retry.',
+        code: 'FORECAST_TIMEOUT'
+      });
+    }
+
+    res.status(err.status || 502).json({
+      error: err.message || 'Unable to fetch forecast.',
+      code: err.code || 'FORECAST_ERROR'
+    });
+
+  } finally {
+    clearTimeout(timer);
   }
 });
 

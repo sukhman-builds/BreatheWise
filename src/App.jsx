@@ -819,15 +819,19 @@ export default function App() {
           />
         )}
 
-        {activeNav === 'forecast' && (
-          <ForecastView />
+                {activeNav === 'forecast' && (
+          <ForecastView
+            latitude={currentLocation?.latitude}
+            longitude={currentLocation?.longitude}
+            stationName={currentStationName}
+          />
         )}
 
         {/* Global Footer */}
         <footer>
           <div className="footer-content">
-            <p><strong>BreatheWise</strong> · Real physical data. Clear scientific insights. Zero fabricated values.</p>
-            <p>Observational data powered by the OpenAQ v3 Global Air Quality API.</p>
+            <p><strong>BreatheWise</strong> · Verified observations. Model-based forecasts. Clear scientific insights.</p>
+             <p>Observational data powered by OpenAQ v3. Air quality forecasts powered by Open-Meteo.</p>
             <p className="footer-disclaimer">
               Scientific Notice: PM2.5 concentration in µg/m³ measures particulate mass density.
               It is distinct from the composite Air Quality Index (AQI), which is calculated via official non-linear breakpoint equations.
