@@ -542,7 +542,7 @@ export async function fetchSupportedStations(options = {}) {
 }
 
 /**
- * 7. Check Backend Health & Render Warm-up Detection
+ * 7. Check Backend Health
  */
 export async function checkBackendHealth(options = {}) {
   const { timeoutMs = 8000, signal = null } = options;
@@ -553,8 +553,7 @@ export async function checkBackendHealth(options = {}) {
   } catch (err) {
     return {
       isOnline: false,
-      error: err.message,
-      isColdStart: err instanceof TimeoutError
+      error: err.message
     };
   }
 }

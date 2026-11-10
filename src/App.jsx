@@ -8,6 +8,7 @@ import {
   fetchLocationMeta,
   fetchHistory as apiFetchHistory,
   fetchAmbalaStations,
+  fetchForecast,
   RateLimitError
 } from './api/client';
 import { calculate24HourStats, getSnapshotAdvisory, formatDateTime, getTimeAgo } from './utils/pm25Standards';
@@ -27,7 +28,13 @@ import MapView from './components/MapView';
 import HealthView from './components/HealthView';
 import ForecastView from './components/ForecastView';
 import AlertsView from './components/AlertsView';
+import CleanAirWindow from './components/CleanAirWindow';
+import ReliabilityView from './components/ReliabilityView';
+import LeaderboardView from './components/LeaderboardView';
+import MyLocationsView from './components/MyLocationsView';
+import WeeklyReportView from './components/WeeklyReportView';
 import { evaluateStationAlert, recordAlertEvent, ALERT_STATUS } from './utils/smartAlerts';
+import { loadFavourites, saveFavourites, toggleFavourite, isFavourite } from './utils/favorites';
 
 // Standard pollutants definition
 const pollutants = [
@@ -43,11 +50,15 @@ const pollutants = [
 const NAV_ITEMS = [
   { id: 'overview', label: 'Overview', icon: '▦' },
   { id: 'map', label: 'Air Quality Map', icon: '⌖' },
+  { id: 'leaderboard', label: 'PM2.5 Leaderboard', icon: '🏆' },
+  { id: 'saved', label: 'My Locations', icon: '★' },
   { id: 'trends', label: 'Historical Trends', icon: '▤' },
+  { id: 'report', label: 'Weekly Report', icon: '📄' },
   { id: 'compare', label: 'Compare Cities', icon: '⇄' },
+  { id: 'forecast', label: 'Forecast', icon: '☼' },
   { id: 'alerts', label: 'Smart Alerts', icon: '🔔' },
   { id: 'health', label: 'Health & Safety', icon: '♡' },
-  { id: 'forecast', label: 'Forecast', icon: '☼' },
+  { id: 'reliability', label: 'Data Reliability', icon: '📡' },
 ];
 
 // Custom marker pins generator for Leaflet
@@ -95,7 +106,7 @@ export default function App() {
   const [activeNav, setActiveNav] = useState(() => {
     try {
       const param = new URLSearchParams(window.location.search).get('tab');
-      if (param && ['overview', 'map', 'trends', 'compare', 'alerts', 'health', 'forecast'].includes(param)) {
+      if (param && ['overview', 'map', 'trends', 'compare', 'alerts', 'health', 'forecast', 'leaderboard', 'saved', 'report', 'reliability'].includes(param)) {
         return param;
       }
     } catch {
@@ -196,6 +207,25 @@ export default function App() {
       // ignore in environments without localStorage
     }
   }, [alertHistory]);
+
+  // Saved locations (favourites) persisted in localStorage
+  const [favourites, setFavourites] = useState(() => {
+    return loadFavourites();
+  });
+
+  const handleUpdateFavourites = useCallback((newFavs) => {
+    setFavourites(newFavs);
+    saveFavourites(newFavs);
+  }, []);
+
+  // Stabilized callback for updating airQualityMap from child components
+  const handleAirQualityUpdate = useCallback((newMap) => {
+    setAirQualityMap(prev => ({ ...prev, ...newMap }));
+  }, []);
+
+  // Forecast data map for Clean Air Window computation
+  const [forecastMap, setForecastMap] = useState({});
+  const [forecastLoading, setForecastLoading] = useState(false);
 
   // Update current time clock every 60s
   useEffect(() => {
@@ -298,10 +328,30 @@ export default function App() {
     activeStationAbortRef.current = controller;
 
     async function loadActiveStation() {
-      await Promise.allSettled([
+      const promises = [
         fetchStationData(selectedLocationId, false, controller.signal),
         currentStation.pm25SensorId ? fetchHistory(currentStation.pm25SensorId, false, controller.signal) : Promise.resolve()
-      ]);
+      ];
+
+      if (currentStation.latitude && currentStation.longitude) {
+        setForecastLoading(true);
+        promises.push(
+          fetchForecast(currentStation.latitude, currentStation.longitude, { signal: controller.signal })
+            .then(data => {
+              if (!controller.signal.aborted) {
+                setForecastMap(prev => ({ ...prev, [selectedLocationId]: data }));
+              }
+            })
+            .catch(() => {})
+            .finally(() => {
+              if (!controller.signal.aborted) {
+                setForecastLoading(false);
+              }
+            })
+        );
+      }
+
+      await Promise.allSettled(promises);
     }
 
     loadActiveStation();
@@ -309,7 +359,7 @@ export default function App() {
     return () => {
       controller.abort();
     };
-  }, [selectedLocationId, currentStation.pm25SensorId, fetchStationData, fetchHistory]);
+  }, [selectedLocationId, currentStation.pm25SensorId, currentStation.latitude, currentStation.longitude, fetchStationData, fetchHistory]);
 
   // Load Ambala discovery once on mount
   useEffect(() => {
@@ -546,7 +596,16 @@ export default function App() {
               <small>{currentStation.shortName || currentStation.name}</small>
             </div>
           </div>
-          <div className="api-status-row">
+          <div
+            className="api-status-row interactive-status"
+            onClick={() => {
+              setActiveNav('reliability');
+              setMobileMenuOpen(false);
+            }}
+            title="Click to view Data Reliability & Telemetry Monitor"
+            role="button"
+            tabIndex={0}
+          >
             <span
               className="live-dot"
               style={{
@@ -554,6 +613,7 @@ export default function App() {
               }}
             ></span>
             <span>{loading ? 'Syncing OpenAQ...' : error ? 'API Issue' : 'Live Data Connected'}</span>
+            <span className="api-status-arrow">→</span>
           </div>
           <p className="mobile-footnote">Verified ground observations from OpenAQ v3</p>
         </div>
@@ -589,7 +649,13 @@ export default function App() {
         </nav>
 
         <div className="sidebar-bottom">
-          <div className="api-status-row">
+          <div
+            className="api-status-row interactive-status"
+            onClick={() => setActiveNav('reliability')}
+            title="Click to view Data Reliability & Telemetry Monitor"
+            role="button"
+            tabIndex={0}
+          >
             <span
               className="live-dot"
               style={{
@@ -597,6 +663,7 @@ export default function App() {
               }}
             ></span>
             <span>{loading ? 'Syncing OpenAQ...' : error ? 'API Issue' : 'Live Data Connected'}</span>
+            <span className="api-status-arrow">→</span>
           </div>
           <p>Verified ground observations from OpenAQ v3</p>
         </div>
@@ -667,6 +734,20 @@ export default function App() {
                 <strong>{currentStation.cityName}</strong> · {currentStation.shortName || currentStation.name}
               </span>
             </div>
+
+            {/* Quick Favourite / Bookmark Toggle */}
+            <button
+              type="button"
+              className={`topbar-fav-btn ${isFavourite(selectedLocationId, favourites) ? 'favorited' : ''}`}
+              onClick={() => {
+                const updated = toggleFavourite(selectedLocationId, favourites);
+                handleUpdateFavourites(updated);
+              }}
+              title={isFavourite(selectedLocationId, favourites) ? 'Remove from Saved Locations' : 'Save to My Locations'}
+              aria-label={isFavourite(selectedLocationId, favourites) ? 'Remove from Saved Locations' : 'Save to My Locations'}
+            >
+              {isFavourite(selectedLocationId, favourites) ? '★' : '☆'}
+            </button>
           </div>
         </header>
 
@@ -924,6 +1005,18 @@ export default function App() {
               </div>
             </section>
 
+            {/* Clean Air Window Recommendation */}
+            <section className="section">
+              <CleanAirWindow
+                hourlyForecast={forecastMap[selectedLocationId]?.hourly || []}
+                cityName={currentStation.cityName}
+                stationName={currentStation.name}
+                loading={forecastLoading}
+                error=""
+                nowTimestamp={now}
+              />
+            </section>
+
             {/* Pollutant Levels Grid */}
             <section className="section">
               <div className="section-heading">
@@ -1147,6 +1240,38 @@ export default function App() {
                     <p>Open-Meteo CAMS atmospheric model forecast for {currentStation.cityName}.</p>
                   </div>
                 </div>
+
+                <div className="insight" onClick={() => setActiveNav('leaderboard')} style={{ cursor: 'pointer' }}>
+                  <span>🏆</span>
+                  <div>
+                    <h3>City PM2.5 Leaderboard</h3>
+                    <p>Rank supported cities from lowest to highest physical PM2.5 concentration (not AQI).</p>
+                  </div>
+                </div>
+
+                <div className="insight" onClick={() => setActiveNav('report')} style={{ cursor: 'pointer' }}>
+                  <span>📄</span>
+                  <div>
+                    <h3>Weekly Air Quality Report</h3>
+                    <p>7-day PM2.5 retrospective audit, cleanest/polluted days & printable summary.</p>
+                  </div>
+                </div>
+
+                <div className="insight" onClick={() => setActiveNav('saved')} style={{ cursor: 'pointer' }}>
+                  <span>★</span>
+                  <div>
+                    <h3>My Saved Locations ({favourites.length})</h3>
+                    <p>Quick access to your bookmarked monitoring sites with live status indicators.</p>
+                  </div>
+                </div>
+
+                <div className="insight" onClick={() => setActiveNav('reliability')} style={{ cursor: 'pointer' }}>
+                  <span>📡</span>
+                  <div>
+                    <h3>Data Reliability & Telemetry</h3>
+                    <p>System connectivity, sensor reporting freshness, and cache diagnostics.</p>
+                  </div>
+                </div>
               </div>
             </section>
           </>
@@ -1163,11 +1288,48 @@ export default function App() {
           />
         )}
 
+        {activeNav === 'leaderboard' && (
+          <LeaderboardView
+            nowTimestamp={now}
+            onSelectStation={handleStationSelect}
+            onNavigateOverview={() => setActiveNav('overview')}
+            initialAirQualityMap={airQualityMap}
+            onAirQualityUpdate={handleAirQualityUpdate}
+          />
+        )}
+
+        {activeNav === 'saved' && (
+          <MyLocationsView
+            favourites={favourites}
+            onUpdateFavourites={handleUpdateFavourites}
+            currentStation={currentStation}
+            airQualityMap={airQualityMap}
+            nowTimestamp={now}
+            onSelectStation={handleStationSelect}
+            onNavigateOverview={() => setActiveNav('overview')}
+          />
+        )}
+
         {activeNav === 'trends' && (
           <TrendsView
             activeStationId={selectedLocationId}
             nowTimestamp={now}
             onStationChange={handleStationSelect}
+          />
+        )}
+
+        {activeNav === 'report' && (
+          <WeeklyReportView
+            currentStation={currentStation}
+            currentHistory={currentHistory}
+            loading={historyLoading}
+            error={historyError}
+            nowTimestamp={now}
+            onRefreshHistory={() => {
+              if (currentStation.pm25SensorId) {
+                fetchHistory(currentStation.pm25SensorId, true);
+              }
+            }}
           />
         )}
 
@@ -1210,6 +1372,17 @@ export default function App() {
             longitude={currentStation.longitude}
             stationName={currentStation.name}
             cityName={currentStation.cityName}
+          />
+        )}
+
+        {activeNav === 'reliability' && (
+          <ReliabilityView
+            currentStation={currentStation}
+            currentAir={currentAir}
+            locationMeta={currentLoc}
+            currentHistory={currentHistory}
+            nowTimestamp={now}
+            activeError={error || historyError}
           />
         )}
 

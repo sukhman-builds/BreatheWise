@@ -1,6 +1,7 @@
 
 import { useEffect, useState } from 'react';
 import { fetchForecast } from '../api/client';
+import CleanAirWindow from './CleanAirWindow';
 
 function ForecastChart({ title, data, dataKey, unit }) {
   const values = data
@@ -187,6 +188,15 @@ export default function ForecastView({
               </button>
             </div>
           )}
+
+          <CleanAirWindow
+            hourlyForecast={forecast?.hourly || []}
+            cityName={cityName}
+            stationName={stationName}
+            loading={loading}
+            error={error}
+            nowTimestamp={now}
+          />
 
           <div className="forecast-hero-card">
             <div className="forecast-hero-icon">☼</div>
