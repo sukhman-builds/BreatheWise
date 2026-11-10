@@ -20,6 +20,8 @@ import TrendsView from './components/TrendsView';
 import MapView from './components/MapView';
 import HealthView from './components/HealthView';
 import ForecastView from './components/ForecastView';
+import AlertsView from './components/AlertsView';
+import { evaluateStationAlert, recordAlertEvent, ALERT_STATUS } from './utils/smartAlerts';
 
 // Standard pollutants definition
 const pollutants = [
@@ -37,6 +39,7 @@ const NAV_ITEMS = [
   { id: 'map', label: 'Air Quality Map', icon: '⌖' },
   { id: 'trends', label: 'Historical Trends', icon: '▤' },
   { id: 'compare', label: 'Compare Cities', icon: '⇄' },
+  { id: 'alerts', label: 'Smart Alerts', icon: '🔔' },
   { id: 'health', label: 'Health & Safety', icon: '♡' },
   { id: 'forecast', label: 'Forecast', icon: '☼' },
 ];
@@ -86,7 +89,7 @@ export default function App() {
   const [activeNav, setActiveNav] = useState(() => {
     try {
       const param = new URLSearchParams(window.location.search).get('tab');
-      if (param && ['overview', 'map', 'trends', 'compare', 'health', 'forecast'].includes(param)) {
+      if (param && ['overview', 'map', 'trends', 'compare', 'alerts', 'health', 'forecast'].includes(param)) {
         return param;
       }
     } catch {
@@ -168,6 +171,25 @@ export default function App() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState('');
   const [rateLimitCountdown, setRateLimitCountdown] = useState(null);
+
+  // Persistent Smart AQI Alert History
+  const [alertHistory, setAlertHistory] = useState(() => {
+    try {
+      const saved = localStorage.getItem('breathewise_alert_history');
+      if (saved) return JSON.parse(saved);
+    } catch {
+      // fallback
+    }
+    return [];
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('breathewise_alert_history', JSON.stringify(alertHistory));
+    } catch {
+      // ignore in environments without localStorage
+    }
+  }, [alertHistory]);
 
   // In-flight fetch tracking
   const fetchingRef = useRef(false);
@@ -370,6 +392,53 @@ export default function App() {
   const pm25Snapshot = getSnapshotAdvisory(pm25?.value);
   const stats24h = calculate24HourStats(currentHistory, now);
 
+  // Smart AQI Alert Evaluation for the selected monitoring site
+  const alertEvaluation = useMemo(() => {
+    return evaluateStationAlert({
+      station: currentStation,
+      stats24h,
+      isStale,
+      latestObservationTime: measurementTime,
+      nowTimestamp: now,
+      loading: loading || historyLoading,
+      apiError: error || historyError
+    });
+  }, [currentStation, stats24h, isStale, measurementTime, now, loading, historyLoading, error, historyError]);
+
+  // Record active alerts in history if not already logged
+  useEffect(() => {
+    if (alertEvaluation.status === ALERT_STATUS.ACTIVE_ALERT && alertEvaluation.alert) {
+      const activeAlert = alertEvaluation.alert;
+      const timer = setTimeout(() => {
+        setAlertHistory(prev => recordAlertEvent(prev, activeAlert));
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+  }, [alertEvaluation]);
+
+  const handleDismissAlert = useCallback((alertId, isDismissed = true) => {
+    setAlertHistory(prev => {
+      return prev.map(item => {
+        if (item.id === alertId) {
+          return {
+            ...item,
+            isDismissed,
+            dismissedAt: isDismissed ? Date.now() : null
+          };
+        }
+        return item;
+      });
+    });
+  }, []);
+
+  const handleClearAlertHistory = useCallback(() => {
+    setAlertHistory([]);
+  }, []);
+
+  const activeAlertsCount = useMemo(() => {
+    return alertHistory.filter(item => !item.isDismissed).length;
+  }, [alertHistory]);
+
   // Dynamic greeting based on Indian Standard Time (IST)
   const istHour = (() => {
     try {
@@ -476,6 +545,11 @@ export default function App() {
             >
               <span className="nav-item-icon">{item.icon}</span>
               <span className="nav-item-text">{item.label}</span>
+              {item.id === 'alerts' && activeAlertsCount > 0 && (
+                <span className="nav-alert-badge" title={`${activeAlertsCount} active alert(s)`}>
+                  {activeAlertsCount}
+                </span>
+              )}
               {activeNav === item.id && <span className="nav-item-active-dot">●</span>}
             </button>
           ))}
@@ -519,7 +593,14 @@ export default function App() {
               className={`nav-item ${activeNav === item.id ? 'active' : ''}`}
               onClick={() => setActiveNav(item.id)}
             >
-              {item.icon} {item.label}
+              <span className="nav-item-inner">
+                <span>{item.icon} {item.label}</span>
+                {item.id === 'alerts' && activeAlertsCount > 0 && (
+                  <span className="nav-alert-badge" title={`${activeAlertsCount} active alert(s)`}>
+                    {activeAlertsCount}
+                  </span>
+                )}
+              </span>
             </button>
           ))}
         </nav>
@@ -1019,6 +1100,14 @@ export default function App() {
                   </div>
                 </div>
 
+                <div className="insight" onClick={() => setActiveNav('alerts')} style={{ cursor: 'pointer' }}>
+                  <span>🔔</span>
+                  <div>
+                    <h3>Smart AQI Alerts ({alertEvaluation.status === ALERT_STATUS.ACTIVE_ALERT ? 'Active Alert' : alertEvaluation.status === ALERT_STATUS.NORMAL ? 'Compliant' : 'Monitoring'})</h3>
+                    <p>Automated threshold evaluation against the CPCB NAAQS 24-hour standard (60 µg/m³).</p>
+                  </div>
+                </div>
+
                 <div className="insight" onClick={() => setActiveNav('trends')} style={{ cursor: 'pointer' }}>
                   <span>◷</span>
                   <div>
@@ -1069,6 +1158,20 @@ export default function App() {
           <CompareView
             nowTimestamp={now}
             activeStationId={selectedLocationId}
+          />
+        )}
+
+        {activeNav === 'alerts' && (
+          <AlertsView
+            currentStation={currentStation}
+            stats24h={stats24h}
+            latestObservationTime={measurementTime}
+            nowTimestamp={now}
+            alertEvaluation={alertEvaluation}
+            alertHistory={alertHistory}
+            onDismissAlert={handleDismissAlert}
+            onClearHistory={handleClearAlertHistory}
+            onSelectStation={handleStationSelect}
           />
         )}
 
