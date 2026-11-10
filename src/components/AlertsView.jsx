@@ -369,72 +369,73 @@ export default function AlertsView({
         </div>
       )}
 
-      {/* 4. CPCB NAAQS Alert Thresholds Reference */}
+           {/* 4. PM2.5 Concentration Reference & Alert Severity Levels */}
       <div className="panel alert-thresholds-panel">
         <div className="panel-title-bar">
           <div>
-            <h3>CPCB 24-Hour NAAQS Particulate Standard & Alert Thresholds</h3>
-            <p className="subtitle">Official Central Pollution Control Board (CPCB) statutory benchmarks for physical PM2.5 mass concentration</p>
+            <h3>PM2.5 Concentration Reference & Alert Severity Levels</h3>
+            <p className="subtitle">
+              CPCB 24-hour PM2.5 standard: 60 µg/m³. The other ranges are BreatheWise reference levels and advisory tiers, not official CPCB AQI categories.
+            </p>
           </div>
         </div>
 
         <div className="thresholds-cards-grid">
           <div className="threshold-card compliant-card">
             <div className="threshold-top">
-              <span className="threshold-badge good-bg">Good (≤30 µg/m³)</span>
-              <span className="threshold-status-text">Clean Air</span>
+              <span className="threshold-badge good-bg">Below Standard (0–30 µg/m³)</span>
+              <span className="threshold-status-text">Reference Level</span>
             </div>
             <h4>0 – 30 µg/m³</h4>
-            <p>Meets stringent clean air goals. Little or no health risk. Ideal conditions for outdoor activities.</p>
+            <p>Below the CPCB 24-hour PM2.5 concentration standard.</p>
           </div>
 
           <div className="threshold-card compliant-card">
             <div className="threshold-top">
-              <span className="threshold-badge sat-bg">Satisfactory (31–60 µg/m³)</span>
-              <span className="threshold-status-text">Statutory Limit</span>
+              <span className="threshold-badge sat-bg">At or Below Standard (31–60 µg/m³)</span>
+              <span className="threshold-status-text">CPCB Benchmark</span>
             </div>
             <h4>31 – 60 µg/m³</h4>
-            <p>Complies with Indian NAAQS 24-hour statutory benchmark (60 µg/m³). Normal activities acceptable.</p>
+            <p>At or below the CPCB 24-hour PM2.5 standard of 60 µg/m³.</p>
           </div>
 
           <div className="threshold-card alert-card-mod">
             <div className="threshold-top">
-              <span className="threshold-badge mod-bg">Moderate (61–90 µg/m³)</span>
+              <span className="threshold-badge mod-bg">Tier 1 – Moderate (61–90 µg/m³)</span>
               <span className="threshold-status-text alert-text">Alert Tier 1</span>
             </div>
             <h4>61 – 90 µg/m³</h4>
-            <p>Exceeds standard threshold. May cause breathing discomfort to children, seniors, and sensitive groups.</p>
+            <p>Above the CPCB 24-hour standard. BreatheWise advisory tier 1.</p>
           </div>
 
           <div className="threshold-card alert-card-poor">
             <div className="threshold-top">
-              <span className="threshold-badge poor-bg">Poor (91–120 µg/m³)</span>
+              <span className="threshold-badge poor-bg">Tier 2 – High (91–120 µg/m³)</span>
               <span className="threshold-status-text alert-text">Alert Tier 2</span>
             </div>
             <h4>91 – 120 µg/m³</h4>
-            <p>Significant threshold breach. Breathing discomfort to most people on prolonged exposure. N95 advised.</p>
+            <p>Significantly above the CPCB 24-hour standard. BreatheWise advisory tier 2.</p>
           </div>
 
           <div className="threshold-card alert-card-vpoor">
             <div className="threshold-top">
-              <span className="threshold-badge vpoor-bg">Very Poor (121–250 µg/m³)</span>
+              <span className="threshold-badge vpoor-bg">Tier 3 – Very High (121–250 µg/m³)</span>
               <span className="threshold-status-text alert-text">Alert Tier 3</span>
             </div>
             <h4>121 – 250 µg/m³</h4>
-            <p>Critical threshold breach. Respiratory illness risk on prolonged exposure. Avoid strenuous outdoor activities.</p>
+            <p>Well above the CPCB 24-hour standard. BreatheWise advisory tier 3.</p>
           </div>
 
           <div className="threshold-card alert-card-severe">
             <div className="threshold-top">
-              <span className="threshold-badge severe-bg">Severe (&gt;250 µg/m³)</span>
-              <span className="threshold-status-text alert-text">Emergency Alert</span>
+              <span className="threshold-badge severe-bg">Tier 4 – Highest (&gt;250 µg/m³)</span>
+              <span className="threshold-status-text alert-text">Alert Tier 4</span>
             </div>
             <h4>&gt; 250 µg/m³</h4>
-            <p>Emergency air pollution event. Affects healthy people and severely impacts individuals with existing diseases.</p>
+            <p>Extremely elevated PM2.5 concentration. BreatheWise highest advisory tier.</p>
           </div>
         </div>
       </div>
-
       {/* 5. Alert History & Audit Log */}
       <div className="panel alert-history-panel">
         <div className="panel-title-bar">
