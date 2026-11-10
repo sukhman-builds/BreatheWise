@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Circle, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
-import { formatDateTime } from '../utils/pm25Standards';
+import { formatDateTime, getTimeAgo } from '../utils/pm25Standards';
 import {
   SUPPORTED_STATIONS,
   SUPPORTED_CITIES,
@@ -55,16 +55,20 @@ function getStationPin(station) {
 // Helper to smooth pan map
 function MapController({ center, zoom }) {
   const map = useMap();
+  const lat = center?.[0];
+  const lng = center?.[1];
+
   useEffect(() => {
-    if (center && center[0] && center[1]) {
-      map.flyTo(center, zoom, { duration: 1.2 });
+    if (lat != null && lng != null) {
+      map.flyTo([lat, lng], zoom, { duration: 1.2 });
     }
-  }, [center, zoom, map]);
+  }, [lat, lng, zoom, map]);
   return null;
 }
 
 export default function MapView({
   activeStationId,
+  nowTimestamp,
   onSelectStation,
   delhiData,
   ambalaData,
@@ -82,7 +86,10 @@ export default function MapView({
   }, [stationsAirMap, delhiData, ambalaData]);
 
   const currentStation = getStationById(activeStationId || 8118);
-  const mapCenter = [currentStation.latitude, currentStation.longitude];
+  const mapCenter = useMemo(
+    () => [currentStation.latitude, currentStation.longitude],
+    [currentStation.latitude, currentStation.longitude]
+  );
 
   const handleStationSelect = (stationId) => {
     onSelectStation(stationId);
@@ -154,6 +161,10 @@ export default function MapView({
               const stationAir = airLookup[station.id];
               const pm25 = stationAir?.readings?.find(r => r.pollutant === 'pm25');
               const measurementTime = pm25?.datetime?.local || pm25?.datetime?.utc;
+              const measurementAgeHours = measurementTime
+                ? (nowTimestamp - new Date(measurementTime).getTime()) / 3600000
+                : null;
+              const isStale = measurementAgeHours !== null && measurementAgeHours > 3;
               const isSelected = activeStationId === station.id;
 
               return (
@@ -174,13 +185,14 @@ export default function MapView({
                       </p>
 
                       <div className="popup-reading">
-                        <span className="popup-label">Latest PM2.5:</span>
+                        <span className="popup-label">{isStale ? 'Last observed PM2.5:' : 'Latest PM2.5:'}</span>
                         <strong>{pm25 ? `${pm25.value} µg/m³` : (stationAir ? 'Reading unavailable' : 'Select to view')}</strong>
                       </div>
 
                       {measurementTime && (
                         <p className="popup-time">
-                          Measured: {formatDateTime(measurementTime)}
+                          Observed: {formatDateTime(measurementTime)}
+                          {isStale && <span className="stale-reading-label">Stale · {getTimeAgo(measurementTime, nowTimestamp)} · not current</span>}
                         </p>
                       )}
 
@@ -252,6 +264,11 @@ export default function MapView({
                 const isSelected = activeStationId === station.id;
                 const stationAir = airLookup[station.id];
                 const pm25 = stationAir?.readings?.find(r => r.pollutant === 'pm25');
+                const measurementTime = pm25?.datetime?.local || pm25?.datetime?.utc;
+                const measurementAgeHours = measurementTime
+                  ? (nowTimestamp - new Date(measurementTime).getTime()) / 3600000
+                  : null;
+                const isStale = measurementAgeHours !== null && measurementAgeHours > 3;
 
                 return (
                   <div
@@ -273,9 +290,14 @@ export default function MapView({
                     <p className="station-meta-desc"><strong>Network:</strong> {station.network}</p>
 
                     <div className="station-list-metric">
-                      <span>PM2.5 Mass:</span>
+                      <span>{isStale ? 'Last PM2.5:' : 'PM2.5 Mass:'}</span>
                       <strong>{pm25 ? `${pm25.value} µg/m³` : (stationAir ? '—' : 'Click to inspect')}</strong>
                     </div>
+                    {isStale && measurementTime && (
+                      <small className="station-stale-note">
+                        Stale · {getTimeAgo(measurementTime, nowTimestamp)} · not current
+                      </small>
+                    )}
 
                     <div className="station-footer-action">
                       <span className="coords-tag">

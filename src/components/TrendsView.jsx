@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
-import { API_BASE_URL } from '../config';
+import { fetchHistory } from '../api/client';
 import { formatDateTime, getTimeAgo } from '../utils/pm25Standards';
 import { getStationById } from '../config/stations';
 
@@ -13,6 +13,7 @@ export default function TrendsView({ activeStationId, nowTimestamp }) {
   const [history, setHistory] = useState([]);
   const [fetchedAt, setFetchedAt] = useState('');
   const [fetchTimestamp, setFetchTimestamp] = useState(null);
+  const [isStaleData, setIsStaleData] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [viewMode, setViewMode] = useState('24h'); // '24h' or '7d'
@@ -21,6 +22,7 @@ export default function TrendsView({ activeStationId, nowTimestamp }) {
 
   useEffect(() => {
     let isMounted = true;
+    const controller = new AbortController();
 
     async function loadData() {
       if (!sensorId) {
@@ -35,17 +37,18 @@ export default function TrendsView({ activeStationId, nowTimestamp }) {
       setLoading(true);
       setError('');
       try {
-        const res = await fetch(`${API_BASE_URL}/api/history/${sensorId}`);
-        if (!res.ok) {
-          throw new Error('Unable to retrieve historical trend data from OpenAQ proxy.');
-        }
-        const data = await res.json();
+        const data = await fetchHistory(sensorId, {
+          force: refreshCount > 0,
+          signal: controller.signal
+        });
         if (!isMounted) return;
         setHistory(data.measurements || []);
         setFetchedAt(data.fetchedAt || '');
+        setIsStaleData(Boolean(data.isStale));
         setFetchTimestamp(Date.now());
         setError('');
       } catch (err) {
+        if (err.name === 'AbortError') return;
         if (isMounted) setError(err.message || 'Error fetching historical data.');
       } finally {
         if (isMounted) setLoading(false);
@@ -53,7 +56,10 @@ export default function TrendsView({ activeStationId, nowTimestamp }) {
     }
 
     loadData();
-    return () => { isMounted = false; };
+    return () => {
+      isMounted = false;
+      controller.abort();
+    };
   }, [sensorId, refreshCount]);
 
   // Filter valid measurements
@@ -77,6 +83,10 @@ export default function TrendsView({ activeStationId, nowTimestamp }) {
   const latestTime = validData[0]?.datetime ?? null;
   const effectiveNow = nowTimestamp || fetchTimestamp;
   const timeAgoText = (latestTime && effectiveNow) ? getTimeAgo(latestTime, effectiveNow) : null;
+  const latestAgeHours = latestTime && effectiveNow
+    ? (effectiveNow - new Date(latestTime).getTime()) / 3600000
+    : null;
+  const isLatestStale = isStaleData || (latestAgeHours !== null && latestAgeHours > 3);
   const minVal = values.length ? Math.min(...values) : 0;
   const maxVal = values.length ? Math.max(...values) : 0;
   const avgVal = values.length
@@ -190,13 +200,14 @@ export default function TrendsView({ activeStationId, nowTimestamp }) {
             {/* Latest Reading */}
             <div className="trends-metric-card">
               <div className="metric-card-top">
-                <span className="metric-card-label">LATEST READING</span>
+                <span className="metric-card-label">{isLatestStale ? 'LAST OBSERVED · STALE' : 'LATEST READING'}</span>
                 <span className="metric-unit-tag">µg/m³</span>
               </div>
               <div className="metric-card-value">
                 {currentVal !== null ? currentVal : '—'}
               </div>
               <div className="metric-card-sub">
+                {isLatestStale && <span className="stale-reading-label">Not current</span>}
                 {timeAgoText ? `Observed ${timeAgoText}` : latestTime ? `Recorded at ${formatDateTime(latestTime)}` : 'Most recent observation'}
               </div>
             </div>

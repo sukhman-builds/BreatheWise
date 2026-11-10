@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { API_BASE_URL } from '../config';
+import { fetchAirQuality, fetchHistory } from '../api/client';
 import {
   calculate24HourStats,
   getSnapshotAdvisory,
@@ -30,48 +30,43 @@ export default function CompareView({ nowTimestamp, activeStationId }) {
 
   useEffect(() => {
     let isMounted = true;
+    const controller = new AbortController();
+    const signal = controller.signal;
 
     async function loadComparison() {
       setLoading(true);
       setError('');
 
       try {
-        const fetchList = [
-          fetch(`${API_BASE_URL}/api/air-quality/${stationAId}`),
-          fetch(`${API_BASE_URL}/api/air-quality/${stationBId}`)
-        ];
-
-        if (stationA?.pm25SensorId) {
-          fetchList.push(fetch(`${API_BASE_URL}/api/history/${stationA.pm25SensorId}`));
-        } else {
-          fetchList.push(Promise.resolve(null));
-        }
-
-        if (stationB?.pm25SensorId) {
-          fetchList.push(fetch(`${API_BASE_URL}/api/history/${stationB.pm25SensorId}`));
-        } else {
-          fetchList.push(Promise.resolve(null));
-        }
-
-        const [resAqA, resAqB, resHistA, resHistB] = await Promise.all(fetchList);
-
-        if (!resAqA.ok && !resAqB.ok) {
-          throw new Error('Failed to retrieve comparative air quality data from OpenAQ proxy.');
-        }
-
-        const [aqA, aqB, histA, histB] = await Promise.all([
-          resAqA.ok ? resAqA.json() : null,
-          resAqB.ok ? resAqB.json() : null,
-          resHistA && resHistA.ok ? resHistA.json() : { measurements: [] },
-          resHistB && resHistB.ok ? resHistB.json() : { measurements: [] }
+        const results = await Promise.allSettled([
+          fetchAirQuality(stationAId, { force: refreshCount > 0, signal }),
+          fetchAirQuality(stationBId, { force: refreshCount > 0, signal }),
+          stationA?.pm25SensorId ? fetchHistory(stationA.pm25SensorId, { force: refreshCount > 0, signal }) : Promise.resolve({ measurements: [] }),
+          stationB?.pm25SensorId ? fetchHistory(stationB.pm25SensorId, { force: refreshCount > 0, signal }) : Promise.resolve({ measurements: [] })
         ]);
 
         if (!isMounted) return;
+
+        const [resAqA, resAqB, resHistA, resHistB] = results;
+
+        const aqA = resAqA.status === 'fulfilled' ? resAqA.value : null;
+        const aqB = resAqB.status === 'fulfilled' ? resAqB.value : null;
+        const histA = resHistA.status === 'fulfilled' ? resHistA.value : { measurements: [] };
+        const histB = resHistB.status === 'fulfilled' ? resHistB.value : { measurements: [] };
+
+        if (!aqA && !aqB) {
+          const errMsg = (resAqA.status === 'rejected' && resAqA.reason?.message) ||
+                         (resAqB.status === 'rejected' && resAqB.reason?.message) ||
+                         'Failed to retrieve comparative air quality data.';
+          throw new Error(errMsg);
+        }
+
         setDataA(aqA);
         setDataB(aqB);
         setHistoryA(histA?.measurements || []);
         setHistoryB(histB?.measurements || []);
       } catch (err) {
+        if (err.name === 'AbortError') return;
         if (isMounted) setError(err.message || 'Error loading comparison data.');
       } finally {
         if (isMounted) setLoading(false);
@@ -79,7 +74,10 @@ export default function CompareView({ nowTimestamp, activeStationId }) {
     }
 
     loadComparison();
-    return () => { isMounted = false; };
+    return () => {
+      isMounted = false;
+      controller.abort();
+    };
   }, [stationAId, stationBId, stationA?.pm25SensorId, stationB?.pm25SensorId, refreshCount]);
 
   const handleSwap = () => {
@@ -102,6 +100,8 @@ export default function CompareView({ nowTimestamp, activeStationId }) {
 
   const timeA = pm25A?.datetime?.local || pm25A?.datetime?.utc;
   const timeB = pm25B?.datetime?.local || pm25B?.datetime?.utc;
+  const isSnapshotStaleA = Boolean(dataA?.isStale) || (timeA && (nowTimestamp - new Date(timeA).getTime()) / 3600000 > 3);
+  const isSnapshotStaleB = Boolean(dataB?.isStale) || (timeB && (nowTimestamp - new Date(timeB).getTime()) / 3600000 > 3);
 
   // Pollutants to compare in table
   const pollutantKeys = [
@@ -300,7 +300,9 @@ export default function CompareView({ nowTimestamp, activeStationId }) {
 
               {/* Segregated Latest Hourly Snapshot */}
               <div className="timestamp-box" style={{ background: '#f8faf7', border: '1px solid #e4ece1', borderRadius: '10px', padding: '12px 14px', marginBottom: '14px' }}>
-                <span className="metric-label" style={{ textAlign: 'left', marginBottom: '4px' }}>LATEST HOURLY READING (SNAPSHOT)</span>
+                <span className="metric-label" style={{ textAlign: 'left', marginBottom: '4px' }}>
+                  {isSnapshotStaleA ? 'LAST OBSERVED · STALE DATA — NOT CURRENT' : 'LATEST HOURLY READING (SNAPSHOT)'}
+                </span>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
                   <div style={{ fontSize: '20px', fontWeight: 800, color: '#1e3a2b' }}>
                     {pm25A ? `${pm25A.value}` : '—'} <span style={{ fontSize: '12px', fontWeight: 600, color: '#7a8e80' }}>µg/m³</span>
@@ -318,6 +320,7 @@ export default function CompareView({ nowTimestamp, activeStationId }) {
                     {snapshotA.label}
                   </div>
                 </div>
+                {isSnapshotStaleA && <span className="stale-reading-label">Stale · {getTimeAgo(timeA, nowTimestamp)} · not current</span>}
                 <div className="timestamp-row">
                   <span className="timestamp-label">Observed at:</span>
                   <span className="timestamp-value">
@@ -396,7 +399,9 @@ export default function CompareView({ nowTimestamp, activeStationId }) {
 
               {/* Segregated Latest Hourly Snapshot */}
               <div className="timestamp-box" style={{ background: '#f8faf7', border: '1px solid #e4ece1', borderRadius: '10px', padding: '12px 14px', marginBottom: '14px' }}>
-                <span className="metric-label" style={{ textAlign: 'left', marginBottom: '4px' }}>LATEST HOURLY READING (SNAPSHOT)</span>
+                <span className="metric-label" style={{ textAlign: 'left', marginBottom: '4px' }}>
+                  {isSnapshotStaleB ? 'LAST OBSERVED · STALE DATA — NOT CURRENT' : 'LATEST HOURLY READING (SNAPSHOT)'}
+                </span>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
                   <div style={{ fontSize: '20px', fontWeight: 800, color: '#1e3a2b' }}>
                     {pm25B ? `${pm25B.value}` : '—'} <span style={{ fontSize: '12px', fontWeight: 600, color: '#7a8e80' }}>µg/m³</span>
@@ -414,6 +419,7 @@ export default function CompareView({ nowTimestamp, activeStationId }) {
                     {snapshotB.label}
                   </div>
                 </div>
+                {isSnapshotStaleB && <span className="stale-reading-label">Stale · {getTimeAgo(timeB, nowTimestamp)} · not current</span>}
                 <div className="timestamp-row">
                   <span className="timestamp-label">Observed at:</span>
                   <span className="timestamp-value">

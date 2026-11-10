@@ -1,6 +1,6 @@
 
 import { useEffect, useState } from 'react';
-import { API_BASE_URL } from '../config';
+import { fetchForecast } from '../api/client';
 
 function ForecastChart({ title, data, dataKey, unit }) {
   const values = data
@@ -14,8 +14,8 @@ function ForecastChart({ title, data, dataKey, unit }) {
       <h3>{title}</h3>
       <p className="muted">Hourly forecast · {unit}</p>
 
-      {data.length === 0 ? (
-        <p>No future forecast data available.</p>
+      {data.length === 0 || values.length === 0 ? (
+        <p className="forecast-empty-message">No forecast values are available for this pollutant.</p>
       ) : (
         <div className="forecast-chart-track">
           {data.map((item, index) => {
@@ -70,17 +70,17 @@ export default function ForecastView({
   stationName,
   cityName
 }) {
-  const [forecast, setForecast] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [refreshKey, setRefreshKey] = useState(0);
-  const [now, setNow] = useState(() => Date.now());
-
   const hasValidCoordinates =
     latitude != null &&
     longitude != null &&
     Number.isFinite(Number(latitude)) &&
     Number.isFinite(Number(longitude));
+
+  const [forecast, setForecast] = useState(null);
+  const [loading, setLoading] = useState(() => hasValidCoordinates);
+  const [error, setError] = useState('');
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 60000);
@@ -97,21 +97,10 @@ export default function ForecastView({
       setError('');
 
       try {
-        const params = new URLSearchParams({
-          latitude: String(latitude),
-          longitude: String(longitude)
+        const result = await fetchForecast(latitude, longitude, {
+          force: refreshKey > 0,
+          signal: controller.signal
         });
-
-        const response = await fetch(
-          `${API_BASE_URL}/api/forecast?${params}`,
-          { signal: controller.signal }
-        );
-
-        const result = await response.json();
-
-        if (!response.ok) {
-          throw new Error(result.error || 'Unable to load forecast.');
-        }
 
         setForecast(result);
       } catch (err) {
@@ -136,11 +125,10 @@ export default function ForecastView({
 
   const nextHour = futureHours[0];
 
-  const maxUsAqi = futureHours.reduce((max, item) => {
-    return Number.isFinite(item.usAqi)
-      ? Math.max(max, item.usAqi)
-      : max;
-  }, 0);
+  const validUsAqis = futureHours
+    .map(item => item.usAqi)
+    .filter(aqi => Number.isFinite(aqi));
+  const maxUsAqi = validUsAqis.length > 0 ? Math.max(...validUsAqis) : null;
 
   return (
     <div className="forecast-view">
@@ -164,16 +152,17 @@ export default function ForecastView({
       </div>
 
       {!hasValidCoordinates ? (
-        <div className="panel" style={{ padding: '25px' }}>
+        <div className="panel forecast-state-card" role="status">
           <h3>Forecast unavailable</h3>
           <p>Monitoring station coordinates are not available yet.</p>
         </div>
       ) : loading ? (
-        <div className="panel" style={{ padding: '30px' }}>
+        <div className="panel forecast-state-card" role="status">
+          <div className="spinner" />
           <p>Loading atmospheric forecast...</p>
         </div>
       ) : error ? (
-        <div className="panel" style={{ padding: '25px' }}>
+        <div className="panel forecast-state-card" role="alert">
           <h3>Forecast unavailable</h3>
           <p>{error}</p>
           <button
@@ -186,6 +175,19 @@ export default function ForecastView({
         </div>
       ) : (
         <>
+          {futureHours.length === 0 && (
+            <div className="empty-card forecast-empty-state" role="status">
+              <p>No future forecast hours are currently available. You can refresh to try again.</p>
+              <button
+                type="button"
+                className="btn-sm"
+                onClick={() => setRefreshKey(value => value + 1)}
+              >
+                Refresh Forecast
+              </button>
+            </div>
+          )}
+
           <div className="forecast-hero-card">
             <div className="forecast-hero-icon">☼</div>
             <div className="forecast-hero-content">

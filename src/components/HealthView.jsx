@@ -1,6 +1,14 @@
-import { PM25_LEVELS, getSnapshotAdvisory } from '../utils/pm25Standards';
+import { PM25_LEVELS, getSnapshotAdvisory, formatDateTime, getTimeAgo } from '../utils/pm25Standards';
 
-export default function HealthView({ currentPm25, stats24h, stationName, cityName }) {
+export default function HealthView({
+  currentPm25,
+  stats24h,
+  stationName,
+  cityName,
+  isCurrentPm25Stale,
+  latestObservationTime,
+  nowTimestamp
+}) {
   const has24h = stats24h && stats24h.hasData && stats24h.coverageQuality !== 'insufficient';
   const activeCategory = has24h ? stats24h.category : null;
   const snapshot = getSnapshotAdvisory(currentPm25);
@@ -73,11 +81,14 @@ export default function HealthView({ currentPm25, stats24h, stationName, cityNam
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px' }}>
           <div>
             <span style={{ fontSize: '10px', fontWeight: 800, letterSpacing: '1px', color: '#7a8e80', textTransform: 'uppercase' }}>
-              IMMEDIATE SITUATIONAL AWARENESS · LATEST HOURLY SNAPSHOT
+              {isCurrentPm25Stale
+                ? 'LAST OBSERVED · STALE DATA — NOT CURRENT'
+                : 'IMMEDIATE SITUATIONAL AWARENESS · LATEST HOURLY SNAPSHOT'}
             </span>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '4px' }}>
               <h3 style={{ margin: 0, fontSize: '18px', color: '#1e3a2b' }}>
-                Instantaneous PM2.5: <strong>{currentPm25 !== null ? currentPm25 : '—'} µg/m³</strong>
+                {isCurrentPm25Stale ? 'Last observed PM2.5:' : 'Instantaneous PM2.5:'}{' '}
+                <strong>{currentPm25 !== null ? currentPm25 : '—'} µg/m³</strong>
               </h3>
               <span
                 className="category-pill"
@@ -92,6 +103,16 @@ export default function HealthView({ currentPm25, stats24h, stationName, cityNam
                 {snapshot.label}
               </span>
             </div>
+            {isCurrentPm25Stale && latestObservationTime && (
+              <span className="stale-reading-label">
+                Stale · {getTimeAgo(latestObservationTime, nowTimestamp)} · not current
+              </span>
+            )}
+            {latestObservationTime && (
+              <p className="health-observation-time">
+                Observed: {formatDateTime(latestObservationTime)}
+              </p>
+            )}
             <p style={{ margin: '8px 0 0', fontSize: '13px', color: '#4a6352' }}>
               {snapshot.description}
             </p>

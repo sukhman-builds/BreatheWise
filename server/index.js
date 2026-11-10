@@ -5,7 +5,8 @@ require('dotenv').config({ path: path.resolve(__dirname, '.env') });
 const {
   SUPPORTED_STATIONS,
   SUPPORTED_CITIES,
-  getStationsByCity
+  getStationsByCity,
+  getStationById
 } = require('./stations.js');
 
 const app = express();
@@ -43,11 +44,12 @@ app.use(express.json());
 const cache = new Map();
 const inFlightRequests = new Map();
 const MAX_CACHE_ENTRIES = 200;
+const MAX_STALE_MS = 24 * 60 * 60 * 1000; // 24 hours stale fallback
 
 function pruneCache() {
   const now = Date.now();
   for (const [key, entry] of cache.entries()) {
-    if (entry.expiresAt <= now) {
+    if (now - (entry.storedAt || entry.expiresAt) > MAX_STALE_MS) {
       cache.delete(key);
     }
   }
@@ -61,22 +63,42 @@ function getFromCache(key) {
   const entry = cache.get(key);
   if (!entry) return null;
   if (Date.now() > entry.expiresAt) {
+    return null; // Expired for normal fresh reads, but preserved for stale fallback
+  }
+  return { data: entry.data, fetchedAt: entry.fetchedAt, isStale: false };
+}
+
+function getStaleFromCache(key) {
+  const entry = cache.get(key);
+  if (!entry) return null;
+  const age = Date.now() - (entry.storedAt || entry.expiresAt);
+  if (age > MAX_STALE_MS) {
     cache.delete(key);
     return null;
   }
-  return { data: entry.data, fetchedAt: entry.fetchedAt };
+  return { data: entry.data, fetchedAt: entry.fetchedAt, isStale: true };
 }
 
 function setInCache(key, data, fetchedAt, ttlMs) {
   pruneCache();
+  const now = Date.now();
   cache.set(key, {
     data,
     fetchedAt,
-    expiresAt: Date.now() + ttlMs
+    storedAt: now,
+    expiresAt: now + ttlMs
   });
 }
 
-// Central OpenAQ fetch helper with timeout, error translation, and request deduplication
+function isTransientHttpStatus(status) {
+  return [502, 503, 504, 408].includes(status);
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// Central OpenAQ fetch helper with timeout, error translation, exponential backoff, and request deduplication
 async function fetchFromOpenAQ(endpoint, queryParams = {}, ttlMs = 300000) {
   if (!API_KEY) {
     const err = new Error('OpenAQ API key is missing on the server');
@@ -89,7 +111,7 @@ async function fetchFromOpenAQ(endpoint, queryParams = {}, ttlMs = 300000) {
   const url = `${OPENAQ_URL}${endpoint}${queryString ? `?${queryString}` : ''}`;
   const cacheKey = url;
 
-  // Check cache first
+  // Check cache first (fresh data)
   const cached = getFromCache(cacheKey);
   if (cached) {
     return cached;
@@ -101,64 +123,133 @@ async function fetchFromOpenAQ(endpoint, queryParams = {}, ttlMs = 300000) {
   }
 
   const fetchPromise = (async () => {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), OPENAQ_TIMEOUT_MS);
+    const MAX_RETRIES = 2;
+    let lastError = null;
 
-    try {
-      const response = await fetch(url, {
-        headers: {
-          'X-API-Key': API_KEY,
-          'Accept': 'application/json'
-        },
-        signal: controller.signal
-      });
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      const controller = new AbortController();
+      let isTimedOut = false;
+      const timer = setTimeout(() => {
+        isTimedOut = true;
+        controller.abort();
+      }, OPENAQ_TIMEOUT_MS);
 
-      clearTimeout(timer);
+      try {
+        const response = await fetch(url, {
+          headers: {
+            'X-API-Key': API_KEY,
+            'Accept': 'application/json'
+          },
+          signal: controller.signal
+        });
 
-      if (response.status === 429) {
-        const err = new Error('OpenAQ rate limit reached. Please retry in 30 seconds.');
-        err.code = 'RATE_LIMITED';
-        err.status = 429;
-        err.retryAfter = 30;
-        throw err;
+        clearTimeout(timer);
+
+        if (response.status === 429) {
+          const retryHeader = response.headers.get('Retry-After');
+          const retryAfterSec = retryHeader ? parseInt(retryHeader, 10) : 30;
+          const err = new Error('OpenAQ rate limit reached. Please retry in 30 seconds.');
+          err.code = 'RATE_LIMITED';
+          err.status = 429;
+          err.retryAfter = isNaN(retryAfterSec) ? 30 : retryAfterSec;
+          throw err;
+        }
+
+        if (response.status === 401 || response.status === 403) {
+          const err = new Error('OpenAQ authentication failed. Please verify API key.');
+          err.code = 'UPSTREAM_AUTH_ERROR';
+          err.status = 502;
+          throw err;
+        }
+
+        const text = await response.text();
+        let json = null;
+        let isJsonValid = false;
+
+        if (text && text.trim().length > 0) {
+          try {
+            json = JSON.parse(text);
+            isJsonValid = true;
+          } catch {
+            isJsonValid = false;
+          }
+        }
+
+        if (!response.ok) {
+          const err = new Error(`OpenAQ responded with status ${response.status}`);
+          err.code = isTransientHttpStatus(response.status) ? 'UPSTREAM_TEMPORARILY_UNAVAILABLE' : 'UPSTREAM_ERROR';
+          err.status = isTransientHttpStatus(response.status) ? 502 : response.status;
+          err.upstreamStatus = response.status;
+
+          // If transient, retry
+          if (attempt < MAX_RETRIES && isTransientHttpStatus(response.status)) {
+            await sleep(500 * Math.pow(2, attempt));
+            continue;
+          }
+          throw err;
+        }
+
+        if (!isJsonValid) {
+          const err = new Error('OpenAQ returned non-JSON payload.');
+          err.code = 'UPSTREAM_INVALID_JSON';
+          err.status = 502;
+          if (attempt < MAX_RETRIES) {
+            await sleep(500 * Math.pow(2, attempt));
+            continue;
+          }
+          throw err;
+        }
+
+        const fetchedAt = new Date().toISOString();
+        setInCache(cacheKey, json, fetchedAt, ttlMs);
+        return { data: json, fetchedAt, isStale: false };
+
+      } catch (err) {
+        clearTimeout(timer);
+
+        let resolvedError = err;
+        if (isTimedOut || err.name === 'AbortError') {
+          resolvedError = new Error('OpenAQ request timed out');
+          resolvedError.code = 'GATEWAY_TIMEOUT';
+          resolvedError.status = 504;
+        }
+
+        lastError = resolvedError;
+
+        // If rate limited, auth error, or permanent 4xx, do not retry
+        if (resolvedError.status === 429 || resolvedError.code === 'RATE_LIMITED' || resolvedError.status === 400 || resolvedError.status === 404 || resolvedError.status === 401 || resolvedError.status === 403) {
+          throw resolvedError;
+        }
+
+        // Retry transient errors
+        if (attempt < MAX_RETRIES) {
+          await sleep(500 * Math.pow(2, attempt));
+          continue;
+        }
       }
-
-      if (response.status === 401 || response.status === 403) {
-        const err = new Error('OpenAQ authentication failed. Please verify API key.');
-        err.code = 'UPSTREAM_AUTH_ERROR';
-        err.status = 502;
-        throw err;
-      }
-
-      if (!response.ok) {
-        const err = new Error(`OpenAQ responded with status ${response.status}`);
-        err.code = 'UPSTREAM_ERROR';
-        err.status = 502;
-        err.upstreamStatus = response.status;
-        throw err;
-      }
-
-      const json = await response.json();
-      const fetchedAt = new Date().toISOString();
-      setInCache(cacheKey, json, fetchedAt, ttlMs);
-      return { data: json, fetchedAt };
-
-    } catch (err) {
-      clearTimeout(timer);
-      if (err.name === 'AbortError') {
-        const timeoutErr = new Error('OpenAQ request timed out');
-        timeoutErr.code = 'GATEWAY_TIMEOUT';
-        timeoutErr.status = 504;
-        throw timeoutErr;
-      }
-      throw err;
-    } finally {
-      inFlightRequests.delete(cacheKey);
     }
+
+    // If all retries failed, check if we have stale cached data to serve as fallback
+    const staleFallback = getStaleFromCache(cacheKey);
+    if (staleFallback) {
+      console.warn(`[OpenAQ Fallback] Upstream unavailable for ${endpoint}, serving stale cached data from ${staleFallback.fetchedAt}`);
+      return {
+        data: staleFallback.data,
+        fetchedAt: staleFallback.fetchedAt,
+        isStale: true,
+        staleReason: 'Upstream OpenAQ API temporarily unreachable; serving cached observation.'
+      };
+    }
+
+    throw lastError || new Error('Failed to retrieve data from OpenAQ after retries');
   })();
 
   inFlightRequests.set(cacheKey, fetchPromise);
-  return fetchPromise;
+  try {
+    return await fetchPromise;
+  } finally {
+    inFlightRequests.delete(cacheKey);
+  }
 }
 
 // 1. Health check
@@ -204,10 +295,55 @@ app.get('/api/location/:locationId', async (req, res, next) => {
       });
     }
 
-    const { data, fetchedAt } = await fetchFromOpenAQ(`/locations/${locationId}`, {}, 3600000); // 1 hour cache
-    const location = Array.isArray(data.results) ? data.results[0] : data.results;
+    const numId = parseInt(locationId, 10);
+    let locationData = null;
+    let fetchedTime = null;
+    let isStale = false;
 
-    if (!location?.coordinates) {
+    try {
+      const result = await fetchFromOpenAQ(`/locations/${locationId}`, {}, 3600000); // 1 hour cache
+      locationData = Array.isArray(result.data.results) ? result.data.results[0] : result.data.results;
+      fetchedTime = result.fetchedAt;
+      isStale = Boolean(result.isStale);
+    } catch (upstreamErr) {
+      // Fallback to verified catalog if available
+      const supported = getStationById(numId);
+      if (supported && supported.id === numId) {
+        return res.json({
+          source: 'BreatheWise Verified Catalog Fallback',
+          locationId: supported.id,
+          name: supported.name,
+          locality: supported.locality || null,
+          country: 'India',
+          provider: supported.provider || null,
+          network: supported.network || null,
+          latitude: supported.latitude,
+          longitude: supported.longitude,
+          fetchedAt: new Date().toISOString(),
+          isFallback: true
+        });
+      }
+      throw upstreamErr;
+    }
+
+    if (!locationData?.coordinates) {
+      const supported = getStationById(numId);
+      if (supported && supported.id === numId) {
+        return res.json({
+          source: 'BreatheWise Verified Catalog Fallback',
+          locationId: supported.id,
+          name: supported.name,
+          locality: supported.locality || null,
+          country: 'India',
+          provider: supported.provider || null,
+          network: supported.network || null,
+          latitude: supported.latitude,
+          longitude: supported.longitude,
+          fetchedAt: fetchedTime || new Date().toISOString(),
+          isFallback: true
+        });
+      }
+
       return res.status(404).json({
         error: 'Location coordinates unavailable',
         code: 'NOT_FOUND'
@@ -216,15 +352,16 @@ app.get('/api/location/:locationId', async (req, res, next) => {
 
     res.json({
       source: 'OpenAQ',
-      locationId: parseInt(locationId, 10),
-      name: location.name,
-      locality: location.locality || null,
-      country: location.country?.name || 'India',
-      provider: location.provider?.name || null,
-      owner: location.owner?.name || null,
-      latitude: location.coordinates.latitude,
-      longitude: location.coordinates.longitude,
-      fetchedAt
+      locationId: numId,
+      name: locationData.name,
+      locality: locationData.locality || null,
+      country: locationData.country?.name || 'India',
+      provider: locationData.provider?.name || null,
+      owner: locationData.owner?.name || null,
+      latitude: locationData.coordinates.latitude,
+      longitude: locationData.coordinates.longitude,
+      fetchedAt: fetchedTime,
+      isStale
     });
 
   } catch (err) {
@@ -277,7 +414,7 @@ app.get('/api/air-quality/:locationId', async (req, res, next) => {
       });
     }
 
-    const { data, fetchedAt } = await fetchFromOpenAQ(`/locations/${locationId}/sensors`, {}, 300000); // 5 min cache
+    const { data, fetchedAt, isStale, staleReason } = await fetchFromOpenAQ(`/locations/${locationId}/sensors`, {}, 300000); // 5 min cache
 
     // Group sensors by pollutant parameter and select the freshest reading
     const pollutantMap = new Map();
@@ -317,7 +454,9 @@ app.get('/api/air-quality/:locationId', async (req, res, next) => {
       locationId: parseInt(locationId, 10),
       readings,
       fetchedAt,
-      updatedAt: fetchedAt
+      updatedAt: fetchedAt,
+      isStale: Boolean(isStale),
+      ...(staleReason ? { staleReason } : {})
     });
 
   } catch (err) {
@@ -347,7 +486,7 @@ app.get('/api/history/:sensorId', async (req, res, next) => {
       page: '1'
     };
 
-    const { data, fetchedAt } = await fetchFromOpenAQ(`/sensors/${sensorId}/measurements`, queryParams, 900000); // 15 min cache
+    const { data, fetchedAt, isStale, staleReason } = await fetchFromOpenAQ(`/sensors/${sensorId}/measurements`, queryParams, 900000); // 15 min cache
 
     const measurements = (data.results || [])
       .filter(item => {
@@ -370,7 +509,9 @@ app.get('/api/history/:sensorId', async (req, res, next) => {
       source: 'OpenAQ',
       sensorId: parseInt(sensorId, 10),
       measurements,
-      fetchedAt
+      fetchedAt,
+      isStale: Boolean(isStale),
+      ...(staleReason ? { staleReason } : {})
     });
 
   } catch (err) {
@@ -461,88 +602,131 @@ app.get('/api/forecast', async (req, res) => {
     return res.json(cached.data);
   }
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 15000);
+  const params = new URLSearchParams({
+    latitude: String(latitude),
+    longitude: String(longitude),
+    hourly: 'pm2_5,pm10,us_aqi',
+    forecast_days: '2',
+    timezone: 'Asia/Kolkata'
+  });
 
-  try {
-    const params = new URLSearchParams({
-      latitude: String(latitude),
-      longitude: String(longitude),
-      hourly: 'pm2_5,pm10,us_aqi',
-      forecast_days: '2',
-      timezone: 'Asia/Kolkata'
-    });
+  const url = `https://air-quality-api.open-meteo.com/v1/air-quality?${params}`;
+  const MAX_RETRIES = 2;
+  let lastError = null;
 
-    const url = `https://air-quality-api.open-meteo.com/v1/air-quality?${params}`;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    const controller = new AbortController();
+    let isTimedOut = false;
+    const timer = setTimeout(() => {
+      isTimedOut = true;
+      controller.abort();
+    }, 15000);
 
-    const response = await fetch(url, {
-      headers: { Accept: 'application/json' },
-      signal: controller.signal
-    });
-
-    if (!response.ok) {
-      const err = new Error('Forecast provider is temporarily unavailable.');
-      err.status = 502;
-      err.code = 'FORECAST_PROVIDER_ERROR';
-      throw err;
-    }
-
-    const data = await response.json();
-
-    if (
-      !data.hourly ||
-      !Array.isArray(data.hourly.time) ||
-      !Array.isArray(data.hourly.pm2_5) ||
-      !Array.isArray(data.hourly.pm10) ||
-      !Array.isArray(data.hourly.us_aqi)
-    ) {
-      const err = new Error('Forecast data is incomplete.');
-      err.status = 502;
-      err.code = 'INVALID_FORECAST_DATA';
-      throw err;
-    }
-
-    const forecast = {
-      source: 'Open-Meteo',
-      model: 'CAMS-based air quality forecast',
-      forecastType: 'Modelled forecast, not ground-station measurement',
-      coordinates: { latitude, longitude },
-      timezone: data.timezone || 'Asia/Kolkata',
-      units: {
-        pm2_5: 'µg/m³',
-        pm10: 'µg/m³',
-        us_aqi: 'US AQI'
-      },
-      hourly: data.hourly.time.map((time, index) => ({
-        time,
-        pm25: data.hourly.pm2_5[index] ?? null,
-        pm10: data.hourly.pm10[index] ?? null,
-        usAqi: data.hourly.us_aqi[index] ?? null
-      })),
-      fetchedAt: new Date().toISOString()
-    };
-
-    setInCache(cacheKey, forecast, forecast.fetchedAt, 1800000);
-    res.json(forecast);
-
-  } catch (err) {
-    console.error('[Forecast Error]:', err.message);
-
-    if (err.name === 'AbortError') {
-      return res.status(504).json({
-        error: 'Forecast request timed out. Please retry.',
-        code: 'FORECAST_TIMEOUT'
+    try {
+      const response = await fetch(url, {
+        headers: { Accept: 'application/json' },
+        signal: controller.signal
       });
+
+      clearTimeout(timer);
+
+      if (!response.ok) {
+        const err = new Error('Forecast provider is temporarily unavailable.');
+        err.status = isTransientHttpStatus(response.status) ? 502 : response.status;
+        err.code = 'FORECAST_PROVIDER_ERROR';
+
+        if (attempt < MAX_RETRIES && isTransientHttpStatus(response.status)) {
+          await sleep(500 * Math.pow(2, attempt));
+          continue;
+        }
+        throw err;
+      }
+
+      const text = await response.text();
+      let data = null;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        const err = new Error('Forecast provider returned non-JSON payload.');
+        err.status = 502;
+        err.code = 'INVALID_FORECAST_DATA';
+        if (attempt < MAX_RETRIES) {
+          await sleep(500 * Math.pow(2, attempt));
+          continue;
+        }
+        throw err;
+      }
+
+      if (
+        !data.hourly ||
+        !Array.isArray(data.hourly.time) ||
+        !Array.isArray(data.hourly.pm2_5) ||
+        !Array.isArray(data.hourly.pm10) ||
+        !Array.isArray(data.hourly.us_aqi)
+      ) {
+        const err = new Error('Forecast data is incomplete.');
+        err.status = 502;
+        err.code = 'INVALID_FORECAST_DATA';
+        throw err;
+      }
+
+      const forecast = {
+        source: 'Open-Meteo',
+        model: 'CAMS-based air quality forecast',
+        forecastType: 'Modelled forecast, not ground-station measurement',
+        coordinates: { latitude, longitude },
+        timezone: data.timezone || 'Asia/Kolkata',
+        units: {
+          pm2_5: 'µg/m³',
+          pm10: 'µg/m³',
+          us_aqi: 'US AQI'
+        },
+        hourly: data.hourly.time.map((time, index) => ({
+          time,
+          pm25: data.hourly.pm2_5[index] ?? null,
+          pm10: data.hourly.pm10[index] ?? null,
+          usAqi: data.hourly.us_aqi[index] ?? null
+        })),
+        fetchedAt: new Date().toISOString()
+      };
+
+      setInCache(cacheKey, forecast, forecast.fetchedAt, 1800000);
+      return res.json(forecast);
+
+    } catch (err) {
+      clearTimeout(timer);
+
+      let resolvedError = err;
+      if (isTimedOut || err.name === 'AbortError') {
+        resolvedError = new Error('Forecast request timed out. Please retry.');
+        resolvedError.status = 504;
+        resolvedError.code = 'FORECAST_TIMEOUT';
+      }
+
+      lastError = resolvedError;
+
+      if (attempt < MAX_RETRIES && (isTransientHttpStatus(resolvedError.status) || resolvedError.code === 'FORECAST_TIMEOUT')) {
+        await sleep(500 * Math.pow(2, attempt));
+        continue;
+      }
     }
-
-    res.status(err.status || 502).json({
-      error: err.message || 'Unable to fetch forecast.',
-      code: err.code || 'FORECAST_ERROR'
-    });
-
-  } finally {
-    clearTimeout(timer);
   }
+
+  // Check stale cache fallback if network calls failed
+  const stale = getStaleFromCache(cacheKey);
+  if (stale) {
+    return res.json({
+      ...stale.data,
+      isStale: true,
+      staleReason: 'Forecast provider temporarily unavailable; serving cached forecast.'
+    });
+  }
+
+  console.error('[Forecast Error]:', lastError?.message);
+  res.status(lastError?.status || 502).json({
+    error: lastError?.message || 'Unable to fetch forecast.',
+    code: lastError?.code || 'FORECAST_ERROR'
+  });
 });
 
 // JSON 404 for unknown /api routes

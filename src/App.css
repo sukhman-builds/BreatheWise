@@ -4516,3 +4516,485 @@ body.nav-drawer-open {
     padding: 10px 8px;
   }
 }
+
+/* Shared visual polish and accessible mobile sizing */
+:root {
+  color-scheme: light;
+  --surface: #ffffff;
+  --surface-muted: #f7faf6;
+  --border-subtle: #e1e9df;
+  --text-primary: #20382e;
+  --text-secondary: #5e7567;
+  --brand-green: #1b4937;
+}
+
+.main-content {
+  background: #f6f8f4;
+}
+
+.section-heading h2,
+.alerts-header h2,
+.trends-header h2 {
+  color: var(--brand-green);
+  letter-spacing: -0.025em;
+}
+
+.section-heading p,
+.subtitle,
+.trends-subtitle,
+.alerts-subtitle {
+  color: var(--text-secondary);
+  line-height: 1.55;
+}
+
+.panel,
+.aqi-card,
+.pollutant-card,
+.trends-metric-card,
+.compare-card,
+.alert-banner-card,
+.threshold-card,
+.forecast-hero-card {
+  border-color: var(--border-subtle);
+  box-shadow: 0 3px 14px rgba(32, 56, 46, 0.045);
+}
+
+.welcome-banner {
+  background: linear-gradient(120deg, #e3f0df 0%, #d7e9d4 100%);
+  border: 1px solid #d2e3ce;
+}
+
+.welcome-banner p:last-child,
+.coverage-detail-text,
+.scientific-rule-box p,
+.forecast-lead {
+  color: #496756;
+}
+
+.status-tag,
+.metric-sublabel,
+.card-label,
+.pollutant-name,
+.metric-card-label,
+.tag-label {
+  line-height: 1.4;
+}
+
+.stale-tag {
+  background: #fff3d9;
+  color: #805610;
+  border: 1px solid #e8c976;
+}
+
+.metric-snapshot-block.stale-measurement {
+  background: #fffaf0;
+  border-color: #e8cc8d;
+}
+
+.stale-reading-label {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  max-width: 100%;
+  padding: 4px 9px;
+  border: 1px solid #e5c779;
+  border-radius: 999px;
+  background: #fff3d9;
+  color: #744d08;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.stale-pollutant-card {
+  border-color: #e5c779;
+  background: #fffdf7;
+}
+
+.stale-pollutant-card small,
+.station-stale-note {
+  color: #744d08;
+  font-weight: 700;
+}
+
+.station-stale-note {
+  display: block;
+  margin-top: 6px;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.popup-time .stale-reading-label {
+  display: flex;
+  margin-top: 5px;
+}
+
+.metric-card-sub .stale-reading-label {
+  margin-right: 5px;
+}
+
+.health-observation-time {
+  margin: 6px 0 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.forecast-state-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 24px;
+}
+
+.forecast-state-card p,
+.forecast-state-card h3 {
+  margin-bottom: 0;
+}
+
+.forecast-empty-message {
+  padding: 14px;
+  border-radius: 10px;
+  background: var(--surface-muted);
+  color: var(--text-secondary);
+  line-height: 1.55;
+}
+
+.forecast-empty-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+  padding: 16px;
+}
+
+.forecast-empty-state p {
+  margin: 0;
+}
+
+.btn-sm,
+.btn-refresh,
+.btn-retry,
+.btn-retry-sm,
+.btn-link,
+.mobile-station-list-toggle-btn,
+.city-pill-btn,
+.toggle-btn,
+.btn-swap-locations {
+  transition: color 160ms ease, background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.btn-sm:focus-visible,
+.btn-refresh:focus-visible,
+.btn-retry:focus-visible,
+.btn-retry-sm:focus-visible,
+.btn-link:focus-visible,
+.city-pill-btn:focus-visible,
+.toggle-btn:focus-visible,
+.btn-swap-locations:focus-visible,
+.mobile-station-list-toggle-btn:focus-visible {
+  outline: 3px solid #91bd83;
+  outline-offset: 2px;
+}
+
+@media (hover: hover) {
+  .pollutant-card,
+  .trends-metric-card,
+  .compare-card,
+  .station-list-card {
+    transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+  }
+
+  .pollutant-card:hover,
+  .trends-metric-card:hover,
+  .compare-card:hover,
+  .station-list-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 7px 18px rgba(32, 56, 46, 0.09);
+  }
+}
+
+@media (max-width: 767px) {
+  .main-content {
+    padding: 18px 16px;
+  }
+
+  .topbar {
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+
+  .topbar h1 {
+    font-size: clamp(24px, 6vw, 30px);
+    line-height: 1.2;
+  }
+
+  .subtitle,
+  .section-heading p,
+  .trends-subtitle,
+  .alerts-subtitle,
+  .welcome-banner p:last-child {
+    font-size: 14px;
+  }
+
+  .welcome-banner {
+    padding: 22px;
+    border-radius: 15px;
+  }
+
+  .welcome-banner h2 {
+    font-size: clamp(24px, 6vw, 31px);
+    line-height: 1.22;
+  }
+
+  .banner-label {
+    font-size: 11px;
+    letter-spacing: 1.1px;
+  }
+
+  .section {
+    margin-bottom: 24px;
+  }
+
+  .section-heading {
+    margin-bottom: 12px;
+  }
+
+  .section-heading h2,
+  .alerts-header h2,
+  .trends-header h2 {
+    font-size: 19px;
+    line-height: 1.3;
+  }
+
+  .aqi-card,
+  .panel {
+    border-radius: 14px;
+  }
+
+  .card-label,
+  .metric-sublabel,
+  .pollutant-name,
+  .metric-card-label,
+  .meta-pill-label,
+  .tag-label,
+  .status-tag {
+    font-size: 11px;
+  }
+
+  .coverage-detail-text,
+  .scientific-rule-box p,
+  .snapshot-caveat,
+  .muted,
+  .chart-note,
+  .pollutant-card p,
+  .pollutant-card small,
+  .metric-card-sub,
+  .station-meta-desc,
+  .sidebar-subtitle,
+  .forecast-lead,
+  .footer-disclaimer {
+    font-size: 12px;
+    line-height: 1.55;
+  }
+
+  .scientific-rule-box {
+    padding: 13px;
+    gap: 10px;
+  }
+
+  .pollutant-grid {
+    gap: 12px;
+  }
+
+  .pollutant-card {
+    padding: 15px 13px;
+    border-radius: 12px;
+  }
+
+  .pollutant-card h3 {
+    font-size: 23px;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+  }
+
+  .history-panel {
+    padding: 16px;
+  }
+
+  .history-summary {
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-bottom: 18px;
+  }
+
+  .history-summary > div {
+    flex: 1 1 135px;
+    min-width: 0;
+  }
+
+  .history-summary h2 {
+    font-size: 19px;
+    overflow-wrap: anywhere;
+  }
+
+  .history-chart {
+    height: 180px;
+    gap: 4px;
+    padding-bottom: 6px;
+  }
+
+  .chart-column span {
+    font-size: 11px;
+  }
+
+  .chart-panel,
+  .forecast-chart-panel {
+    padding: 16px;
+  }
+
+  .chart-plot-area {
+    min-height: 210px;
+  }
+
+  .chart-y-axis {
+    width: 40px;
+    font-size: 11px;
+  }
+
+  .chart-x-label,
+  .chart-legend-row,
+  .legend-chip {
+    font-size: 11px;
+  }
+
+  .leaflet-map-responsive {
+    height: clamp(300px, 78vw, 400px);
+  }
+
+  .map-leaflet-panel,
+  .map-sidebar-panel {
+    padding: 14px;
+  }
+
+  .station-cards-stack {
+    max-height: min(52vh, 420px);
+  }
+
+  .city-filter-bar {
+    gap: 7px;
+    padding-bottom: 8px;
+  }
+
+  .city-pill-btn {
+    min-height: 38px;
+    font-size: 12px;
+  }
+
+  .station-list-card {
+    padding: 14px;
+  }
+
+  .station-meta-desc {
+    margin-bottom: 7px;
+  }
+
+  .alerts-view,
+  .trends-view,
+  .compare-view,
+  .health-view,
+  .forecast-view {
+    min-width: 0;
+  }
+
+  .alerts-header,
+  .trends-header {
+    margin-bottom: 16px;
+  }
+
+  .alerts-station-card,
+  .trends-station-card {
+    padding: 16px;
+  }
+
+  .trends-metrics-grid,
+  .alert-metrics-grid {
+    gap: 10px;
+  }
+
+  .trends-metric-card {
+    padding: 14px;
+  }
+
+  .metric-card-value {
+    font-size: clamp(23px, 6vw, 30px);
+  }
+
+  .forecast-chart-track {
+    height: 180px;
+    gap: 4px;
+  }
+
+  .forecast-chart-track small {
+    font-size: 11px !important;
+  }
+
+  .table-responsive {
+    border-radius: 10px;
+  }
+
+  footer {
+    padding: 18px 4px;
+    line-height: 1.6;
+  }
+}
+
+@media (max-width: 375px) {
+  .main-content {
+    padding: 14px 12px;
+  }
+
+  .welcome-banner {
+    padding: 18px 16px;
+  }
+
+  .welcome-banner p:last-child,
+  .subtitle,
+  .section-heading p {
+    font-size: 13px;
+  }
+
+  .pollutant-grid {
+    gap: 9px;
+  }
+
+  .pollutant-card {
+    padding: 13px 11px;
+  }
+
+  .pollutant-card p,
+  .pollutant-card small,
+  .muted,
+  .coverage-detail-text,
+  .scientific-rule-box p,
+  .snapshot-caveat {
+    font-size: 12px;
+  }
+
+  .history-summary > div {
+    flex-basis: 120px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

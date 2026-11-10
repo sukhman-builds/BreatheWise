@@ -3,7 +3,13 @@ import { MapContainer, TileLayer, Marker, Popup, Circle } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import './App.css';
-import { API_BASE_URL } from './config';
+import {
+  fetchAirQuality,
+  fetchLocationMeta,
+  fetchHistory as apiFetchHistory,
+  fetchAmbalaStations,
+  RateLimitError
+} from './api/client';
 import { calculate24HourStats, getSnapshotAdvisory, formatDateTime, getTimeAgo } from './utils/pm25Standards';
 import {
   SUPPORTED_STATIONS,
@@ -191,9 +197,6 @@ export default function App() {
     }
   }, [alertHistory]);
 
-  // In-flight fetch tracking
-  const fetchingRef = useRef(false);
-
   // Update current time clock every 60s
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 60000);
@@ -213,42 +216,24 @@ export default function App() {
     }
   }, [activeNav, selectedCity, selectedLocationId]);
 
+  // Ref to cancel obsolete in-flight requests when switching stations
+  const activeStationAbortRef = useRef(null);
+
   // Fetch air quality and location details for the active station
-  const fetchStationData = useCallback(async (locationId, force = false) => {
+  const fetchStationData = useCallback(async (locationId, force = false, signal = null) => {
     const station = getStationById(locationId);
     if (!station) return;
 
-    // Check if cached recently (within 5 minutes)
-    const existing = airQualityMap[locationId];
-    if (!force && existing && existing.fetchedAt) {
-      const ageMs = Date.now() - new Date(existing.fetchedAt).getTime();
-      if (ageMs < 300000) {
-        setLoading(false);
-        setError('');
-        return;
-      }
-    }
-
+    await Promise.resolve();
+    if (signal?.aborted) return;
     setLoading(true);
     setError('');
 
     try {
-      const [aqRes, locRes] = await Promise.all([
-        fetch(`${API_BASE_URL}/api/air-quality/${locationId}`),
-        fetch(`${API_BASE_URL}/api/location/${locationId}`)
+      const [aqData, locData] = await Promise.all([
+        fetchAirQuality(locationId, { force, signal }),
+        fetchLocationMeta(locationId, { force, signal }).catch(() => null)
       ]);
-
-      if (aqRes.status === 429) {
-        setRateLimitCountdown(30);
-        throw new Error('Rate limit encountered on OpenAQ. Automatic retry in 30 seconds.');
-      }
-
-      if (!aqRes.ok) {
-        throw new Error(`Unable to fetch real-time air quality for station ID ${locationId}.`);
-      }
-
-      const aqData = await aqRes.json();
-      const locData = locRes.ok ? await locRes.json() : null;
 
       setAirQualityMap(prev => ({
         ...prev,
@@ -264,80 +249,78 @@ export default function App() {
 
       setError('');
     } catch (err) {
+      if (err.name === 'AbortError') return;
+      if (err instanceof RateLimitError) {
+        setRateLimitCountdown(err.retryAfter || 30);
+      }
       setError(err.message || 'Error communicating with backend API.');
     } finally {
       setLoading(false);
     }
-  }, [airQualityMap]);
+  }, []);
 
   // Fetch historical PM2.5 measurements for active station
-  const fetchHistory = useCallback(async (sensorId, force = false) => {
+  const fetchHistory = useCallback(async (sensorId, force = false, signal = null) => {
     if (!sensorId) {
       setHistoryLoading(false);
       return;
     }
 
-    const existing = historyMap[sensorId];
-    if (!force && existing && existing.length > 0) {
-      setHistoryLoading(false);
-      setHistoryError('');
-      return;
-    }
-
+    await Promise.resolve();
+    if (signal?.aborted) return;
     setHistoryLoading(true);
     setHistoryError('');
 
     try {
-      const res = await fetch(`${API_BASE_URL}/api/history/${sensorId}`);
-      if (res.status === 429) {
-        setRateLimitCountdown(30);
-        throw new Error('Rate limit encountered on OpenAQ. Automatic retry in 30 seconds.');
-      }
-
-      if (!res.ok) {
-        throw new Error(`Unable to fetch historical measurements for sensor ${sensorId}.`);
-      }
-
-      const data = await res.json();
+      const data = await apiFetchHistory(sensorId, { force, signal });
       setHistoryMap(prev => ({
         ...prev,
         [sensorId]: data.measurements || []
       }));
       setHistoryError('');
     } catch (err) {
+      if (err.name === 'AbortError') return;
+      if (err instanceof RateLimitError) {
+        setRateLimitCountdown(err.retryAfter || 30);
+      }
       setHistoryError(err.message || 'Failed to retrieve historical timeline.');
     } finally {
       setHistoryLoading(false);
     }
-  }, [historyMap]);
+  }, []);
 
-  // Load initial data and Ambala discovery
+  // Load active station data concurrently with obsolete-request cancellation
   useEffect(() => {
-    let isMounted = true;
+    if (activeStationAbortRef.current) {
+      activeStationAbortRef.current.abort();
+    }
+    const controller = new AbortController();
+    activeStationAbortRef.current = controller;
 
-    async function init() {
-      if (fetchingRef.current) return;
-      fetchingRef.current = true;
-
-      try {
-        await Promise.all([
-          fetchStationData(selectedLocationId),
-          currentStation.pm25SensorId ? fetchHistory(currentStation.pm25SensorId) : Promise.resolve(),
-          fetch(`${API_BASE_URL}/api/ambala-stations`)
-            .then(r => r.ok ? r.json() : null)
-            .then(data => {
-              if (isMounted && data) setAmbalaDiscovery(data);
-            })
-            .catch(() => {})
-        ]);
-      } finally {
-        fetchingRef.current = false;
-      }
+    async function loadActiveStation() {
+      await Promise.allSettled([
+        fetchStationData(selectedLocationId, false, controller.signal),
+        currentStation.pm25SensorId ? fetchHistory(currentStation.pm25SensorId, false, controller.signal) : Promise.resolve()
+      ]);
     }
 
-    init();
-    return () => { isMounted = false; };
+    loadActiveStation();
+
+    return () => {
+      controller.abort();
+    };
   }, [selectedLocationId, currentStation.pm25SensorId, fetchStationData, fetchHistory]);
+
+  // Load Ambala discovery once on mount
+  useEffect(() => {
+    let isMounted = true;
+    fetchAmbalaStations()
+      .then(data => {
+        if (isMounted && data) setAmbalaDiscovery(data);
+      })
+      .catch(() => {});
+    return () => { isMounted = false; };
+  }, []);
 
   // Rate limit countdown handler
   useEffect(() => {
@@ -383,11 +366,11 @@ export default function App() {
   const measurementTime = pm25?.datetime?.local || pm25?.datetime?.utc;
   const fetchTime = currentAir?.fetchedAt;
 
-  // Stale measurement calculation using pure state timestamp
+  // Stale measurement calculation using pure state timestamp or upstream stale flag
   const ageHours = measurementTime
     ? (now - new Date(measurementTime).getTime()) / 3600000
     : null;
-  const isStale = ageHours !== null && ageHours > 3;
+  const isStale = Boolean(currentAir?.isStale) || (ageHours !== null && ageHours > 3);
 
   const pm25Snapshot = getSnapshotAdvisory(pm25?.value);
   const stats24h = calculate24HourStats(currentHistory, now);
@@ -746,11 +729,15 @@ export default function App() {
             <section className="section">
               <div className="section-heading">
                 <div>
-                  <h2>Current Air Quality: {currentStation.name}</h2>
-                  <p>Observational PM2.5 mass concentration reported by ground sensor in {currentStation.locality}</p>
+                  <h2>{isStale ? 'Air Quality · Last Observation:' : 'Current Air Quality:'} {currentStation.name}</h2>
+                  <p>
+                    {isStale
+                      ? `Most recent station observation from ${currentStation.locality}; this reading is stale, not current.`
+                      : `Observational PM2.5 mass concentration reported by ground sensor in ${currentStation.locality}`}
+                  </p>
                 </div>
                 <div className="tags-group">
-                  {isStale && <span className="status-tag stale-tag">OLDER MEASUREMENT (&gt;3H)</span>}
+                  {isStale && <span className="status-tag stale-tag">STALE DATA · NOT CURRENT</span>}
                   <span className="status-tag">
                     {loading ? 'LOADING' : error ? 'API ERROR' : 'OPENAQ VERIFIED'}
                   </span>
@@ -758,16 +745,33 @@ export default function App() {
               </div>
 
               <div className="aqi-card">
-                <p className="card-label">PHYSICAL PM2.5 MASS CONCENTRATION & 24-HOUR ROLLING AVERAGE</p>
+                <p className="card-label">
+                  {isStale
+                    ? 'LAST OBSERVED PM2.5 MASS CONCENTRATION · NOT A CURRENT READING'
+                    : 'PHYSICAL PM2.5 MASS CONCENTRATION & 24-HOUR ROLLING AVERAGE'}
+                </p>
 
-                {loading ? (
+                {loading && !pm25 ? (
                   <div className="card-loading-state">
                     <div className="spinner"></div>
                     <h2>Loading sensor observations...</h2>
                   </div>
-                ) : error ? (
+                ) : error && !pm25 ? (
                   <div className="card-error-state">
                     <h3>{error}</h3>
+                    <button
+                      type="button"
+                      className="btn-retry-sm"
+                      style={{ marginTop: '12px' }}
+                      onClick={() => {
+                        fetchStationData(selectedLocationId, true);
+                        if (currentStation.pm25SensorId) {
+                          fetchHistory(currentStation.pm25SensorId, true);
+                        }
+                      }}
+                    >
+                      Retry Connection
+                    </button>
                   </div>
                 ) : pm25 ? (
                   <>
@@ -835,13 +839,20 @@ export default function App() {
                       </div>
 
                       {/* Latest Single Observation */}
-                      <div className="metric-snapshot-block">
+                      <div className={`metric-snapshot-block${isStale ? ' stale-measurement' : ''}`}>
                         <div>
-                          <span className="metric-sublabel">LATEST SINGLE READING (SNAPSHOT)</span>
+                          <span className="metric-sublabel">
+                            {isStale ? 'LAST OBSERVED · STALE DATA — NOT CURRENT' : 'LATEST SINGLE READING (SNAPSHOT)'}
+                          </span>
                           <div className="snapshot-value-row">
                             <div className="snapshot-value">
                               {pm25.value} <span className="snapshot-unit">µg/m³</span>
                             </div>
+                            {isStale && (
+                              <span className="stale-reading-label">
+                                Stale · {getTimeAgo(measurementTime, now)}
+                              </span>
+                            )}
                             <div
                               className="category-badge-inline snapshot-badge"
                               style={{
@@ -925,9 +936,14 @@ export default function App() {
               <div className="pollutant-grid">
                 {pollutants.map(item => {
                   const reading = readings.find(data => data.pollutant === item.key);
+                  const readingTime = reading?.datetime?.local || reading?.datetime?.utc;
+                  const readingAgeHours = readingTime
+                    ? (now - new Date(readingTime).getTime()) / 3600000
+                    : null;
+                  const readingIsStale = readingAgeHours !== null && readingAgeHours > 3;
 
                   return (
-                    <div className="pollutant-card" key={item.key}>
+                    <div className={`pollutant-card${readingIsStale ? ' stale-pollutant-card' : ''}`} key={item.key}>
                       <span className="pollutant-name">{item.name}</span>
 
                       <h3>
@@ -940,7 +956,7 @@ export default function App() {
                         {loading
                           ? 'Loading'
                           : reading
-                            ? `${reading.unit} · Active Sensor`
+                            ? `${reading.unit} · Active Sensor${readingIsStale ? ' · Stale — not current' : ''}`
                             : 'Sensor not reported'}
                       </small>
                     </div>
@@ -1139,6 +1155,7 @@ export default function App() {
         {activeNav === 'map' && (
           <MapView
             activeStationId={selectedLocationId}
+            nowTimestamp={now}
             onSelectStation={handleStationSelect}
             delhiData={airQualityMap[8118]}
             ambalaData={airQualityMap[6964]}
@@ -1181,6 +1198,9 @@ export default function App() {
             stats24h={stats24h}
             stationName={currentStation.name}
             cityName={currentStation.cityName}
+            isCurrentPm25Stale={isStale}
+            latestObservationTime={measurementTime}
+            nowTimestamp={now}
           />
         )}
 
