@@ -1,56 +1,39 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { API_BASE_URL } from '../config';
-import { formatDateTime, PM25_LEVELS } from '../utils/pm25Standards';
+import { formatDateTime, getTimeAgo } from '../utils/pm25Standards';
+import { getStationById } from '../config/stations';
 
-export default function TrendsView({ activeStationId, onStationChange }) {
-  const [selectedStation, setSelectedStation] = useState(activeStationId || 8118);
+export default function TrendsView({ activeStationId, nowTimestamp }) {
+  const currentStation = useMemo(() => {
+    return getStationById(activeStationId || 8118);
+  }, [activeStationId]);
+
+  const sensorId = currentStation?.pm25SensorId;
+
   const [history, setHistory] = useState([]);
   const [fetchedAt, setFetchedAt] = useState('');
+  const [fetchTimestamp, setFetchTimestamp] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [viewMode, setViewMode] = useState('24h'); // '24h' or '7d'
   const [hoveredPoint, setHoveredPoint] = useState(null);
-
-  // Station definitions with verified PM2.5 sensor IDs
-  const stations = {
-    8118: {
-      name: 'New Delhi (US Diplomatic Post)',
-      sensorId: 23534,
-      locality: 'New Delhi, NCR'
-    },
-    6964: {
-      name: 'Patti Mehar, Ambala - HSPCB',
-      sensorId: 14258997,
-      locality: 'Ambala, Haryana'
-    }
-  };
-
-  const currentStation = stations[selectedStation] || stations[8118];
-
-  const fetchHistoryData = async (sensorId) => {
-    setLoading(true);
-    setError('');
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/history/${sensorId}`);
-      if (!res.ok) {
-        throw new Error('Unable to retrieve historical trend data from OpenAQ proxy.');
-      }
-      const data = await res.json();
-      setHistory(data.measurements || []);
-      setFetchedAt(data.fetchedAt || '');
-    } catch (err) {
-      setError(err.message || 'Error fetching historical data.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const sensorId = currentStation.sensorId;
+  const [refreshCount, setRefreshCount] = useState(0);
 
   useEffect(() => {
     let isMounted = true;
 
     async function loadData() {
+      if (!sensorId) {
+        if (isMounted) {
+          setHistory([]);
+          setError('No PM2.5 sensor is reported for this monitoring site.');
+          setLoading(false);
+        }
+        return;
+      }
+
+      setLoading(true);
+      setError('');
       try {
         const res = await fetch(`${API_BASE_URL}/api/history/${sensorId}`);
         if (!res.ok) {
@@ -60,6 +43,7 @@ export default function TrendsView({ activeStationId, onStationChange }) {
         if (!isMounted) return;
         setHistory(data.measurements || []);
         setFetchedAt(data.fetchedAt || '');
+        setFetchTimestamp(Date.now());
         setError('');
       } catch (err) {
         if (isMounted) setError(err.message || 'Error fetching historical data.');
@@ -70,86 +54,113 @@ export default function TrendsView({ activeStationId, onStationChange }) {
 
     loadData();
     return () => { isMounted = false; };
-  }, [sensorId]);
-
-  const handleStationSelect = (id) => {
-    setSelectedStation(id);
-    setLoading(true);
-    if (onStationChange) onStationChange(id);
-  };
+  }, [sensorId, refreshCount]);
 
   // Filter valid measurements
-  const validData = history.filter(
-    item => item.value !== null && Number.isFinite(Number(item.value))
-  );
+  const validData = useMemo(() => {
+    return history.filter(
+      item => item.value !== null && Number.isFinite(Number(item.value))
+    );
+  }, [history]);
 
   // 24h view uses the most recent 24 data points; 7d uses up to available readings
-  const displayedData = viewMode === '24h'
-    ? validData.slice(0, 24).reverse()
-    : [...validData].reverse();
+  const displayedData = useMemo(() => {
+    if (viewMode === '24h') {
+      return validData.slice(0, 24).reverse();
+    }
+    return [...validData].reverse();
+  }, [validData, viewMode]);
 
   // Statistics calculation
-  const values = displayedData.map(d => Number(d.value));
+  const values = useMemo(() => displayedData.map(d => Number(d.value)), [displayedData]);
   const currentVal = validData[0]?.value ?? null;
+  const latestTime = validData[0]?.datetime ?? null;
+  const effectiveNow = nowTimestamp || fetchTimestamp;
+  const timeAgoText = (latestTime && effectiveNow) ? getTimeAgo(latestTime, effectiveNow) : null;
   const minVal = values.length ? Math.min(...values) : 0;
   const maxVal = values.length ? Math.max(...values) : 0;
   const avgVal = values.length
     ? (values.reduce((sum, v) => sum + v, 0) / values.length).toFixed(1)
-    : 0;
+    : '—';
 
-  const chartMax = Math.max(maxVal * 1.1, 50);
+  // Dynamic y-axis scale headroom
+  const chartMax = Math.max(Math.ceil((maxVal * 1.15) / 10) * 10, 80);
+
+  // CPCB 24-hr NAAQS standard threshold (60 µg/m³)
+  const cpcbThreshold = 60;
+  const cpcbThresholdPercent = (cpcbThreshold / chartMax) * 100;
 
   return (
     <div className="trends-view">
-      <div className="section-heading">
+      {/* 1. Header: Page Title + Time-Range Tabs */}
+      <div className="trends-header">
         <div>
-          <h2>Historical PM2.5 Pollution Trends</h2>
-          <p>Verified observational measurements recorded by OpenAQ ambient air monitors</p>
+          <h2>Historical PM2.5 Trends</h2>
+          <p className="trends-subtitle">
+            Time-series particulate observations from ambient ground-monitoring sensors
+          </p>
         </div>
-        <div className="station-selector-group">
+
+        {/* Time-Range Tabs */}
+        <div className="view-mode-toggle" role="tablist" aria-label="Historical time range">
           <button
-            className={`station-btn ${selectedStation === 8118 ? 'active' : ''}`}
-            onClick={() => handleStationSelect(8118)}
+            type="button"
+            role="tab"
+            aria-selected={viewMode === '24h'}
+            className={`toggle-btn ${viewMode === '24h' ? 'active' : ''}`}
+            onClick={() => setViewMode('24h')}
           >
-            New Delhi (8118)
+            Last 24 Readings
           </button>
           <button
-            className={`station-btn ${selectedStation === 6964 ? 'active' : ''}`}
-            onClick={() => handleStationSelect(6964)}
+            type="button"
+            role="tab"
+            aria-selected={viewMode === '7d'}
+            className={`toggle-btn ${viewMode === '7d' ? 'active' : ''}`}
+            onClick={() => setViewMode('7d')}
           >
-            Ambala (6964)
+            7-Day History {validData.length > 0 ? `(${validData.length} pts)` : ''}
           </button>
         </div>
       </div>
 
-      {/* Header and Controls */}
-      <div className="trends-controls-bar">
-        <div className="station-info-header">
-          <span className="station-badge">ACTIVE STATION</span>
-          <h3>{currentStation.name}</h3>
-          <p className="muted">PM2.5 Sensor ID: {currentStation.sensorId} · {currentStation.locality}</p>
+      {/* 2. Compact Selected-Station Information Card (automatically follows global selector) */}
+      <div className="trends-station-card">
+        <div className="trends-station-primary">
+          <span
+            className="trends-city-badge"
+            style={{ backgroundColor: currentStation.pinColor || '#1b4937' }}
+          >
+            {currentStation.cityName}
+          </span>
+          <div className="trends-station-name-wrap">
+            <h3>{currentStation.name}</h3>
+            <p className="trends-station-locality">
+              {currentStation.locality} · Provider: <strong>{currentStation.provider}</strong> · Network: <strong>{currentStation.network}</strong>
+            </p>
+          </div>
         </div>
 
-        <div className="view-mode-toggle">
-          <button
-            className={`toggle-btn ${viewMode === '24h' ? 'active' : ''}`}
-            onClick={() => setViewMode('24h')}
-          >
-            Latest 24 Readings
-          </button>
-          <button
-            className={`toggle-btn ${viewMode === '7d' ? 'active' : ''}`}
-            onClick={() => setViewMode('7d')}
-          >
-            7-Day History ({validData.length} pts)
-          </button>
+        <div className="trends-station-meta-tags">
+          <span className="trends-meta-pill">
+            <span className="meta-pill-label">SENSOR ID</span>
+            <strong>{sensorId ? `#${sensorId}` : 'Unassigned'}</strong>
+          </span>
+          <span className="trends-meta-pill">
+            <span className="meta-pill-label">COORDINATES</span>
+            <strong>{currentStation.latitude.toFixed(3)}°N, {currentStation.longitude.toFixed(3)}°E</strong>
+          </span>
+          <span className="trends-meta-pill status-pill-verified">
+            <span className="live-dot" style={{ backgroundColor: '#2e7d32' }}></span>
+            <span>OpenAQ Verified</span>
+          </span>
         </div>
       </div>
 
       {loading ? (
         <div className="loading-card">
           <div className="spinner"></div>
-          <p>Loading verified historical data for sensor {currentStation.sensorId}...</p>
+          <p>Retrieving authentic historical measurements for sensor #{sensorId}...</p>
         </div>
       ) : error ? (
         <div className="error-card">
@@ -157,7 +168,15 @@ export default function TrendsView({ activeStationId, onStationChange }) {
           <div>
             <h3>Historical Data Unavailable</h3>
             <p>{error}</p>
-            <button className="btn-retry" onClick={() => fetchHistoryData(currentStation.sensorId)}>Retry Request</button>
+            {sensorId && (
+              <button
+                type="button"
+                className="btn-retry"
+                onClick={() => setRefreshCount(c => c + 1)}
+              >
+                Retry Request
+              </button>
+            )}
           </div>
         </div>
       ) : displayedData.length === 0 ? (
@@ -166,119 +185,244 @@ export default function TrendsView({ activeStationId, onStationChange }) {
         </div>
       ) : (
         <>
-          {/* Summary Statistics Cards */}
-          <div className="stats-row">
-            <div className="stat-card">
-              <span className="stat-label">CURRENT READING</span>
-              <div className="stat-val">
-                {currentVal !== null ? `${currentVal}` : '—'} <small>µg/m³</small>
+          {/* 3. Four Compact Metric Cards with Neutral Labels */}
+          <div className="trends-metrics-grid">
+            {/* Latest Reading */}
+            <div className="trends-metric-card">
+              <div className="metric-card-top">
+                <span className="metric-card-label">LATEST READING</span>
+                <span className="metric-unit-tag">µg/m³</span>
               </div>
-              <span className="stat-sub">Latest recorded point</span>
+              <div className="metric-card-value">
+                {currentVal !== null ? currentVal : '—'}
+              </div>
+              <div className="metric-card-sub">
+                {timeAgoText ? `Observed ${timeAgoText}` : latestTime ? `Recorded at ${formatDateTime(latestTime)}` : 'Most recent observation'}
+              </div>
             </div>
-            <div className="stat-card">
-              <span className="stat-label">PERIOD AVERAGE</span>
-              <div className="stat-val">{avgVal} <small>µg/m³</small></div>
-              <span className="stat-sub">Across {displayedData.length} measurements</span>
+
+            {/* Period Average */}
+            <div className="trends-metric-card">
+              <div className="metric-card-top">
+                <span className="metric-card-label">PERIOD AVERAGE</span>
+                <span className="metric-unit-tag">µg/m³</span>
+              </div>
+              <div className="metric-card-value">
+                {avgVal}
+              </div>
+              <div className="metric-card-sub">
+                Mean across {displayedData.length} observations
+              </div>
             </div>
-            <div className="stat-card">
-              <span className="stat-label">MINIMUM</span>
-              <div className="stat-val stat-good">{minVal.toFixed(1)} <small>µg/m³</small></div>
-              <span className="stat-sub">Cleanest interval</span>
+
+            {/* Minimum */}
+            <div className="trends-metric-card">
+              <div className="metric-card-top">
+                <span className="metric-card-label">MINIMUM</span>
+                <span className="metric-unit-tag">µg/m³</span>
+              </div>
+              <div className="metric-card-value text-min">
+                {minVal.toFixed(1)}
+              </div>
+              <div className="metric-card-sub">
+                Lowest recorded reading in period
+              </div>
             </div>
-            <div className="stat-card">
-              <span className="stat-label">MAXIMUM</span>
-              <div className="stat-val stat-high">{maxVal.toFixed(1)} <small>µg/m³</small></div>
-              <span className="stat-sub">Peak pollution event</span>
+
+            {/* Maximum */}
+            <div className="trends-metric-card">
+              <div className="metric-card-top">
+                <span className="metric-card-label">MAXIMUM</span>
+                <span className="metric-unit-tag">µg/m³</span>
+              </div>
+              <div className="metric-card-value text-max">
+                {maxVal.toFixed(1)}
+              </div>
+              <div className="metric-card-sub">
+                Highest recorded reading in period
+              </div>
             </div>
           </div>
 
-          {/* Chart Panel */}
+          {/* 4. Enhanced Historical Chart Panel */}
           <div className="panel chart-panel">
             <div className="chart-header">
               <div>
-                <h4>PM2.5 Mass Concentration Over Time</h4>
+                <h4>PM2.5 Mass Concentration Timeline</h4>
                 <p className="chart-subtitle">
-                  {viewMode === '24h' ? 'Showing latest 24 observations' : `Showing all ${displayedData.length} observations from the last 7 days`}
+                  {viewMode === '24h' ? 'Chronological hourly observations' : 'Multi-day historical trend'} · Physical mass density (µg/m³)
                 </p>
               </div>
 
-              {fetchedAt && (
-                <div className="fetch-indicator">
-                  <span>OpenAQ fetch time: {formatDateTime(fetchedAt)}</span>
-                </div>
-              )}
+              {/* Dynamic hover or latest observation chip */}
+              <div className="chart-current-chip">
+                {hoveredPoint ? (
+                  <span className="chip-active-val">
+                    <strong>{hoveredPoint.value} µg/m³</strong> at {formatDateTime(hoveredPoint.datetime)} (IST)
+                  </span>
+                ) : (
+                  <span className="chip-idle-text">
+                    Hover over bars to inspect hourly readings
+                  </span>
+                )}
+              </div>
             </div>
 
-            {/* Interactive Tooltip Card if hovering */}
-            {hoveredPoint && (
-              <div className="chart-tooltip-display">
-                <span className="tooltip-dot" style={{ backgroundColor: '#00897b' }}></span>
-                <strong>{hoveredPoint.value} µg/m³</strong>
-                <span className="tooltip-cat">(Hourly observation snapshot · Not a 24-hour regulatory category)</span>
-                <span className="tooltip-time">Measured: {formatDateTime(hoveredPoint.datetime)}</span>
-              </div>
-            )}
-
-            {/* Bar Chart Container */}
-            <div className="interactive-chart-container">
-              <div className="chart-y-axis">
-                <span>{Math.round(chartMax)}</span>
+            {/* Chart Area with Y-Axis and Reference Guideline */}
+            <div className="chart-plot-wrapper">
+              {/* Y-Axis scale labels */}
+              <div className="chart-y-axis" aria-hidden="true">
+                <span>{chartMax}</span>
                 <span>{Math.round(chartMax * 0.75)}</span>
                 <span>{Math.round(chartMax * 0.5)}</span>
                 <span>{Math.round(chartMax * 0.25)}</span>
                 <span>0</span>
               </div>
 
-              <div className="chart-bars-wrap">
-                {displayedData.map((item, index) => {
-                  const val = Number(item.value);
-                  const heightPercent = Math.max((val / chartMax) * 100, 2);
-                  const dateObj = new Date(item.datetime);
-                  const hourLabel = isNaN(dateObj.getTime())
-                    ? String(index)
-                    : dateObj.toLocaleTimeString('en-IN', { hour: '2-digit', hour12: false, timeZone: 'Asia/Kolkata' });
+              {/* Chart Plot Area */}
+              <div className="chart-plot-area">
+                {/* Horizontal reference lines */}
+                <div className="grid-line line-100" style={{ bottom: '100%' }}></div>
+                <div className="grid-line line-75" style={{ bottom: '75%' }}></div>
+                <div className="grid-line line-50" style={{ bottom: '50%' }}></div>
+                <div className="grid-line line-25" style={{ bottom: '25%' }}></div>
+                <div className="grid-line line-0" style={{ bottom: '0%' }}></div>
 
-                  return (
-                    <div
-                      className="interactive-bar-col"
-                      key={`${item.datetime}-${index}`}
-                      onMouseEnter={() => setHoveredPoint(item)}
-                      onMouseLeave={() => setHoveredPoint(null)}
-                    >
-                      <div className="bar-track">
-                        <div
-                          className="colored-bar"
-                          style={{
-                            height: `${heightPercent}%`,
-                            backgroundColor: '#00897b'
-                          }}
-                        />
+                {/* Subtle CPCB 24-hr Standard Line (60 µg/m³) */}
+                {cpcbThresholdPercent > 0 && cpcbThresholdPercent < 100 && (
+                  <div
+                    className="cpcb-reference-line"
+                    style={{ bottom: `${cpcbThresholdPercent}%` }}
+                    title="Subtle reference: CPCB 24-hour standard threshold (60 µg/m³)"
+                  >
+                    <span className="cpcb-line-tag">CPCB 24h Standard: 60 µg/m³</span>
+                  </div>
+                )}
+
+                {/* Bars flex track */}
+                <div className="chart-bars-track">
+                  {displayedData.map((item, index) => {
+                    const val = Number(item.value);
+                    const heightPercent = Math.min(Math.max((val / chartMax) * 100, 2), 100);
+
+                    // Color based on Indian CPCB NAAQS brackets
+                    let barColor = '#4caf50'; // Good (0-30)
+                    if (val > 250) barColor = '#b71c1c'; // Severe (>250)
+                    else if (val > 120) barColor = '#c2185b'; // Very Poor (121-250)
+                    else if (val > 90) barColor = '#e65100'; // Poor (91-120)
+                    else if (val > 60) barColor = '#f57f17'; // Moderate (61-90)
+                    else if (val > 30) barColor = '#8bc34a'; // Satisfactory (31-60)
+
+                    const dateObj = new Date(item.datetime);
+                    const hour = isNaN(dateObj.getTime())
+                      ? `${index}h`
+                      : dateObj.toLocaleTimeString('en-IN', { hour: '2-digit', hour12: false, timeZone: 'Asia/Kolkata' });
+
+                    const dateLabel = isNaN(dateObj.getTime())
+                      ? ''
+                      : dateObj.toLocaleDateString('en-IN', { month: 'short', day: 'numeric', timeZone: 'Asia/Kolkata' });
+
+                    // Label frequency calculation to prevent crowding
+                    const totalBars = displayedData.length;
+                    const showLabel = viewMode === '24h'
+                      ? (totalBars <= 12 || index % 2 === 0)
+                      : (index % Math.ceil(totalBars / 8) === 0);
+
+                    const isHovered = hoveredPoint === item;
+
+                    return (
+                      <div
+                        key={`${item.datetime}-${index}`}
+                        className={`chart-bar-slot ${isHovered ? 'hovered' : ''}`}
+                        onMouseEnter={() => setHoveredPoint(item)}
+                        onMouseLeave={() => setHoveredPoint(null)}
+                      >
+                        <div className="bar-track-outer">
+                          <div
+                            className="bar-track-fill"
+                            style={{
+                              height: `${heightPercent}%`,
+                              backgroundColor: barColor
+                            }}
+                          />
+                        </div>
+
+                        {showLabel && (
+                          <span className="chart-x-label">
+                            {viewMode === '24h' ? `${hour}h` : dateLabel}
+                          </span>
+                        )}
                       </div>
-                      <span className="bar-axis-label">{hourLabel}h</span>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
             </div>
 
-            {/* Threshold Legend */}
-            <div className="chart-legend">
-              <span className="legend-title">CPCB NAAQS 24-hr PM2.5 Reference Bands (Evaluated against 24-hour averages, not isolated hourly bars):</span>
-              {PM25_LEVELS.map(level => (
-                <div className="legend-item" key={level.label}>
-                  <span className="legend-color-box" style={{ backgroundColor: level.color }}></span>
-                  <span className="legend-name">{level.label}</span>
-                  <small className="legend-range">
-                    {level.max === Infinity ? '>250' : `≤${level.max}`} µg/m³
-                  </small>
-                </div>
-              ))}
+            {/* Chart Legend & Context Footer */}
+            <div className="chart-legend-row">
+              <span className="legend-head">CPCB Categories:</span>
+              <div className="legend-chip">
+                <span className="legend-color-dot" style={{ backgroundColor: '#4caf50' }}></span>
+                <span>Good (≤30)</span>
+              </div>
+              <div className="legend-chip">
+                <span className="legend-color-dot" style={{ backgroundColor: '#8bc34a' }}></span>
+                <span>Satisfactory (31–60)</span>
+              </div>
+              <div className="legend-chip">
+                <span className="legend-color-dot" style={{ backgroundColor: '#f57f17' }}></span>
+                <span>Moderate (61–90)</span>
+              </div>
+              <div className="legend-chip">
+                <span className="legend-color-dot" style={{ backgroundColor: '#e65100' }}></span>
+                <span>Poor (91–120)</span>
+              </div>
+              <div className="legend-chip">
+                <span className="legend-color-dot" style={{ backgroundColor: '#c2185b' }}></span>
+                <span>Very Poor (121–250)</span>
+              </div>
+              <div className="legend-chip">
+                <span className="legend-color-dot" style={{ backgroundColor: '#b71c1c' }}></span>
+                <span>Severe (&gt;250)</span>
+              </div>
             </div>
 
-            <p className="chart-footer-note">
-              * Hover over any bar to inspect timestamp and exact PM2.5 concentration reading. Individual bars represent hourly observations; regulatory CPCB NAAQS benchmarks evaluate rolling 24-hour averages. All times in Indian Standard Time (IST).
-            </p>
+            <div className="chart-footer-meta">
+              <span>Sensor: <strong>#{sensorId}</strong> ({currentStation.provider})</span>
+              <span>Unit: <strong>µg/m³</strong> (Physical mass density)</span>
+              <span>Timezone: <strong>Asia/Kolkata (IST)</strong></span>
+              {fetchedAt && <span>Retrieved: {formatDateTime(fetchedAt)}</span>}
+            </div>
           </div>
+
+          {/* 5. Scientific Accuracy: Compact Collapsible Information Section */}
+          <details className="scientific-collapsible">
+            <summary className="scientific-summary">
+              <span className="summary-icon">⚖</span>
+              <span className="summary-title">Scientific Interpretation & Regulatory Context</span>
+              <span className="summary-badge">Physical Concentration vs. AQI</span>
+              <span className="summary-chevron" aria-hidden="true">▾</span>
+            </summary>
+            <div className="scientific-content">
+              <div className="scientific-grid">
+                <div className="scientific-item">
+                  <strong>Physical Concentration (µg/m³):</strong>
+                  <p>
+                    Values displayed represent physical mass density of airborne particulate matter smaller than 2.5 micrometers.
+                    Mass concentration is distinct from the multi-pollutant composite Air Quality Index (AQI), which relies on non-linear piecewise linear conversion formulas across multiple criteria gases and particulates.
+                  </p>
+                </div>
+                <div className="scientific-item">
+                  <strong>Regulatory 24-Hour Averaging:</strong>
+                  <p>
+                    Official Central Pollution Control Board (CPCB) NAAQS standards evaluate statutory compliance against a <strong>rolling 24-hour mean concentration</strong> (60 µg/m³).
+                    Individual hourly bars inform real-time situational awareness (e.g. morning peak inversion or afternoon ventilation), but single readings do not represent official compliance status.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </details>
         </>
       )}
     </div>

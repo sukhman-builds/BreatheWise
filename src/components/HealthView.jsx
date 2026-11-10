@@ -1,6 +1,6 @@
 import { PM25_LEVELS, getSnapshotAdvisory } from '../utils/pm25Standards';
 
-export default function HealthView({ currentPm25, stats24h, stationName }) {
+export default function HealthView({ currentPm25, stats24h, stationName, cityName }) {
   const has24h = stats24h && stats24h.hasData && stats24h.coverageQuality !== 'insufficient';
   const activeCategory = has24h ? stats24h.category : null;
   const snapshot = getSnapshotAdvisory(currentPm25);
@@ -25,7 +25,7 @@ export default function HealthView({ currentPm25, stats24h, stationName }) {
       >
         <div className="health-status-left">
           <span className="health-eyebrow">
-            ROLLING 24-HOUR EXPOSURE LEVEL · {stationName || 'SELECTED STATION'}
+            ROLLING 24-HOUR EXPOSURE LEVEL · {cityName ? `${cityName.toUpperCase()} · ` : ''}{stationName || 'SELECTED STATION'}
           </span>
           <h3>
             {has24h

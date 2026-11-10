@@ -18,6 +18,34 @@ test('Backend Health Endpoint returns 200 and expected shape', async () => {
   }
 });
 
+test('Supported Stations Endpoint returns catalog of verified cities and stations', async () => {
+  const server = app.listen(0);
+  const port = server.address().port;
+
+  try {
+    const res = await fetch(`http://localhost:${port}/api/stations`);
+    assert.strictEqual(res.status, 200);
+    const body = await res.json();
+    assert.ok(Array.isArray(body.cities));
+    assert.ok(Array.isArray(body.stations));
+    assert.ok(body.cities.includes('Ambala'));
+    assert.ok(body.cities.includes('New Delhi'));
+    assert.ok(body.cities.includes('Chandigarh'));
+    assert.ok(body.cities.includes('Jaipur'));
+    assert.ok(body.stations.length >= 9);
+
+    const delhiStation = body.stations.find(s => s.id === 8118);
+    assert.ok(delhiStation);
+    assert.strictEqual(delhiStation.pm25SensorId, 23534);
+
+    const ambalaStation = body.stations.find(s => s.id === 6964);
+    assert.ok(ambalaStation);
+    assert.strictEqual(ambalaStation.pm25SensorId, 14258997);
+  } finally {
+    server.close();
+  }
+});
+
 test('Invalid location ID returns 400 with structured error', async () => {
   const server = app.listen(0);
   const port = server.address().port;

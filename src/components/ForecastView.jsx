@@ -10,21 +10,14 @@ function ForecastChart({ title, data, dataKey, unit }) {
   const maxValue = Math.max(...values, 1);
 
   return (
-    <div className="panel" style={{ padding: '20px', minWidth: 0 }}>
+    <div className="panel forecast-chart-panel">
       <h3>{title}</h3>
       <p className="muted">Hourly forecast · {unit}</p>
 
       {data.length === 0 ? (
         <p>No future forecast data available.</p>
       ) : (
-        <div style={{
-          display: 'flex',
-          alignItems: 'flex-end',
-          gap: '5px',
-          height: '190px',
-          paddingTop: '20px',
-          overflowX: 'auto'
-        }}>
+        <div className="forecast-chart-track">
           {data.map((item, index) => {
             const value = item[dataKey];
             const valid = Number.isFinite(value);
@@ -74,7 +67,8 @@ function ForecastChart({ title, data, dataKey, unit }) {
 export default function ForecastView({
   latitude,
   longitude,
-  stationName
+  stationName,
+  cityName
 }) {
   const [forecast, setForecast] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -154,7 +148,8 @@ export default function ForecastView({
         <div>
           <h2>Air Quality Forecast</h2>
           <p>
-            Model-based hourly outlook for {stationName || 'selected station'}
+            Model-based hourly outlook for {cityName ? `${cityName} · ` : ''}{stationName || 'selected station'}
+            {hasValidCoordinates ? ` (${Number(latitude).toFixed(4)}°N, ${Number(longitude).toFixed(4)}°E)` : ''}
           </p>
         </div>
 
@@ -245,11 +240,7 @@ export default function ForecastView({
             </div>
           </div>
 
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-            gap: '18px'
-          }}>
+          <div className="forecast-charts-grid">
             <ForecastChart
               title="PM2.5 Forecast"
               data={futureHours}
@@ -276,7 +267,8 @@ export default function ForecastView({
             <h3>Forecast Data Transparency</h3>
             <p><strong>Provider:</strong> Open-Meteo</p>
             <p><strong>Model:</strong> CAMS-based air quality forecast</p>
-            <p><strong>Location:</strong> {stationName}</p>
+            <p><strong>Location:</strong> {cityName ? `${cityName} · ` : ''}{stationName}</p>
+            <p><strong>Coordinates:</strong> {Number(latitude).toFixed(4)}°N, {Number(longitude).toFixed(4)}°E</p>
             <p><strong>Timezone:</strong> Asia/Kolkata (IST)</p>
             <p>
               <strong>Retrieved:</strong>{' '}

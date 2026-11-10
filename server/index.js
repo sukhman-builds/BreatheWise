@@ -2,13 +2,18 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '.env') });
+const {
+  SUPPORTED_STATIONS,
+  SUPPORTED_CITIES,
+  getStationsByCity
+} = require('./stations.js');
 
 const app = express();
 
 const PORT = process.env.PORT || 5000;
 const API_KEY = process.env.OPENAQ_API_KEY;
 const OPENAQ_URL = 'https://api.openaq.org/v3';
-const OPENAQ_TIMEOUT_MS = parseInt(process.env.OPENAQ_TIMEOUT_MS, 10) || 10000;
+const OPENAQ_TIMEOUT_MS = parseInt(process.env.OPENAQ_TIMEOUT_MS, 10) || 15000;
 
 // Log key configuration warning at startup if missing
 if (!API_KEY) {
@@ -163,6 +168,27 @@ app.get('/api/health', (req, res) => {
     message: 'BreatheWise backend is running!',
     hasApiKey: Boolean(API_KEY),
     timestamp: new Date().toISOString()
+  });
+});
+
+// 1b. Supported Stations and Cities catalog
+app.get('/api/stations', (req, res) => {
+  const { city } = req.query;
+  if (city) {
+    const cityStations = getStationsByCity(city);
+    return res.json({
+      source: 'BreatheWise Verified Stations',
+      city,
+      count: cityStations.length,
+      stations: cityStations
+    });
+  }
+
+  res.json({
+    source: 'BreatheWise Verified Stations',
+    cities: SUPPORTED_CITIES,
+    count: SUPPORTED_STATIONS.length,
+    stations: SUPPORTED_STATIONS
   });
 });
 

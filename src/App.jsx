@@ -1,10 +1,19 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Circle } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import './App.css';
 import { API_BASE_URL } from './config';
 import { calculate24HourStats, getSnapshotAdvisory, formatDateTime, getTimeAgo } from './utils/pm25Standards';
+import {
+  SUPPORTED_STATIONS,
+  SUPPORTED_CITIES,
+  DEFAULT_STATION_ID,
+  getStationById,
+  getStationsByCity,
+  getDefaultStationForCity,
+  getCityForStation
+} from './config/stations';
 
 import CompareView from './components/CompareView';
 import TrendsView from './components/TrendsView';
@@ -22,7 +31,17 @@ const pollutants = [
   { name: 'O₃', key: 'o3', description: 'Ground-level photochemical ozone' },
 ];
 
-// Custom marker pins for Leaflet
+// Navigation sections configuration
+const NAV_ITEMS = [
+  { id: 'overview', label: 'Overview', icon: '▦' },
+  { id: 'map', label: 'Air Quality Map', icon: '⌖' },
+  { id: 'trends', label: 'Historical Trends', icon: '▤' },
+  { id: 'compare', label: 'Compare Cities', icon: '⇄' },
+  { id: 'health', label: 'Health & Safety', icon: '♡' },
+  { id: 'forecast', label: 'Forecast', icon: '☼' },
+];
+
+// Custom marker pins generator for Leaflet
 function createPin(color, label) {
   return L.divIcon({
     className: 'custom-map-pin',
@@ -54,8 +73,14 @@ function createPin(color, label) {
   });
 }
 
-const pinDelhi = createPin('#1b5e20', 'DEL');
-const pinAmbala = createPin('#00695c', 'AMB');
+const pinCache = new Map();
+function getStationPin(station) {
+  const key = `${station.pinColor || '#1b5e20'}-${station.pinLabel || 'AQI'}`;
+  if (!pinCache.has(key)) {
+    pinCache.set(key, createPin(station.pinColor || '#1b5e20', station.pinLabel || 'AQI'));
+  }
+  return pinCache.get(key);
+}
 
 export default function App() {
   const [activeNav, setActiveNav] = useState(() => {
@@ -68,28 +93,84 @@ export default function App() {
       // fallback
     }
     return 'overview';
-  }); // overview | map | trends | compare | health | forecast
-  const [selectedLocationId, setSelectedLocationId] = useState(8118); // 8118 (Delhi) or 6964 (Ambala)
+  });
+
+  // Global selected location ID with URL persistence support
+  const [selectedLocationId, setSelectedLocationId] = useState(() => {
+    try {
+      const param = new URLSearchParams(window.location.search).get('station');
+      if (param && /^\d+$/.test(param)) {
+        const id = Number(param);
+        if (SUPPORTED_STATIONS.some(s => s.id === id)) {
+          return id;
+        }
+      }
+      const cityParam = new URLSearchParams(window.location.search).get('city');
+      if (cityParam) {
+        const st = getDefaultStationForCity(cityParam);
+        if (st) return st.id;
+      }
+    } catch {
+      // fallback
+    }
+    return DEFAULT_STATION_ID;
+  });
+
+  // Selected city derived or selected
+  const [selectedCity, setSelectedCity] = useState(() => getCityForStation(selectedLocationId));
+
+  // Current station configuration
+  const currentStation = useMemo(() => {
+    return getStationById(selectedLocationId);
+  }, [selectedLocationId]);
+
+  // Stations available in the current city
+  const stationsInCurrentCity = useMemo(() => {
+    return getStationsByCity(selectedCity);
+  }, [selectedCity]);
+
+  // Mobile navigation drawer open/close state
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Close mobile navigation drawer on Escape key press
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') setMobileMenuOpen(false);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  // Lock body scroll when mobile drawer is open
+  useEffect(() => {
+    if (mobileMenuOpen) {
+      document.body.classList.add('nav-drawer-open');
+    } else {
+      document.body.classList.remove('nav-drawer-open');
+    }
+    return () => {
+      document.body.classList.remove('nav-drawer-open');
+    };
+  }, [mobileMenuOpen]);
 
   // Current timestamp stored in state to strictly honor React 19 pure component rules
   const [now, setNow] = useState(() => Date.now());
 
-  // Data states
-  const [delhiAir, setDelhiAir] = useState(null);
-  const [ambalaAir, setAmbalaAir] = useState(null);
-  const [delhiLocation, setDelhiLocation] = useState(null);
-  const [ambalaLocation, setAmbalaLocation] = useState(null);
+  // Cached data maps to avoid redundant API queries when switching views/tabs
+  const [airQualityMap, setAirQualityMap] = useState({});
+  const [historyMap, setHistoryMap] = useState({});
+  const [locationMetaMap, setLocationMetaMap] = useState({});
   const [ambalaDiscovery, setAmbalaDiscovery] = useState(null);
 
-  // History state for overview quick chart
-  const [history, setHistory] = useState([]);
-  const [historyLoading, setHistoryLoading] = useState(true);
-  const [historyError, setHistoryError] = useState('');
-
-  // Status states
+  // Status states for current station
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState('');
   const [rateLimitCountdown, setRateLimitCountdown] = useState(null);
+
+  // In-flight fetch tracking
+  const fetchingRef = useRef(false);
 
   // Update current time clock every 60s
   useEffect(() => {
@@ -97,139 +178,183 @@ export default function App() {
     return () => clearInterval(timer);
   }, []);
 
-  // Fetch verified stations and air quality
-  const fetchAllData = async () => {
+  // Sync URL search params
+  useEffect(() => {
     try {
-      const [delhiAqRes, ambalaAqRes, delhiLocRes, ambalaLocRes, ambalaStationsRes] = await Promise.all([
-        fetch(`${API_BASE_URL}/api/air-quality/8118`),
-        fetch(`${API_BASE_URL}/api/air-quality/6964`),
-        fetch(`${API_BASE_URL}/api/location/8118`),
-        fetch(`${API_BASE_URL}/api/location/6964`),
-        fetch(`${API_BASE_URL}/api/ambala-stations`)
+      const url = new URL(window.location.href);
+      url.searchParams.set('tab', activeNav);
+      url.searchParams.set('city', selectedCity);
+      url.searchParams.set('station', String(selectedLocationId));
+      window.history.replaceState({}, '', url.toString());
+    } catch {
+      // ignore in tests or non-browser environments
+    }
+  }, [activeNav, selectedCity, selectedLocationId]);
+
+  // Fetch air quality and location details for the active station
+  const fetchStationData = useCallback(async (locationId, force = false) => {
+    const station = getStationById(locationId);
+    if (!station) return;
+
+    // Check if cached recently (within 5 minutes)
+    const existing = airQualityMap[locationId];
+    if (!force && existing && existing.fetchedAt) {
+      const ageMs = Date.now() - new Date(existing.fetchedAt).getTime();
+      if (ageMs < 300000) {
+        setLoading(false);
+        setError('');
+        return;
+      }
+    }
+
+    setLoading(true);
+    setError('');
+
+    try {
+      const [aqRes, locRes] = await Promise.all([
+        fetch(`${API_BASE_URL}/api/air-quality/${locationId}`),
+        fetch(`${API_BASE_URL}/api/location/${locationId}`)
       ]);
 
-      if (delhiAqRes.status === 429 || ambalaAqRes.status === 429) {
+      if (aqRes.status === 429) {
         setRateLimitCountdown(30);
         throw new Error('Rate limit encountered on OpenAQ. Automatic retry in 30 seconds.');
       }
 
-      if (!delhiAqRes.ok && !ambalaAqRes.ok) {
-        throw new Error('Unable to connect to BreatheWise backend API.');
+      if (!aqRes.ok) {
+        throw new Error(`Unable to fetch real-time air quality for station ID ${locationId}.`);
       }
 
-      const [delhiAq, ambalaAq, delhiLoc, ambalaLoc, ambalaDisc] = await Promise.all([
-        delhiAqRes.ok ? delhiAqRes.json() : null,
-        ambalaAqRes.ok ? ambalaAqRes.json() : null,
-        delhiLocRes.ok ? delhiLocRes.json() : null,
-        ambalaLocRes.ok ? ambalaLocRes.json() : null,
-        ambalaStationsRes.ok ? ambalaStationsRes.json() : null
-      ]);
+      const aqData = await aqRes.json();
+      const locData = locRes.ok ? await locRes.json() : null;
 
-      setDelhiAir(delhiAq);
-      setAmbalaAir(ambalaAq);
-      setDelhiLocation(delhiLoc);
-      setAmbalaLocation(ambalaLoc);
-      setAmbalaDiscovery(ambalaDisc);
+      setAirQualityMap(prev => ({
+        ...prev,
+        [locationId]: aqData
+      }));
+
+      if (locData) {
+        setLocationMetaMap(prev => ({
+          ...prev,
+          [locationId]: locData
+        }));
+      }
+
       setError('');
-
     } catch (err) {
       setError(err.message || 'Error communicating with backend API.');
     } finally {
       setLoading(false);
     }
-  };
+  }, [airQualityMap]);
 
+  // Fetch historical PM2.5 measurements for active station
+  const fetchHistory = useCallback(async (sensorId, force = false) => {
+    if (!sensorId) {
+      setHistoryLoading(false);
+      return;
+    }
+
+    const existing = historyMap[sensorId];
+    if (!force && existing && existing.length > 0) {
+      setHistoryLoading(false);
+      setHistoryError('');
+      return;
+    }
+
+    setHistoryLoading(true);
+    setHistoryError('');
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/history/${sensorId}`);
+      if (res.status === 429) {
+        setRateLimitCountdown(30);
+        throw new Error('Rate limit encountered on OpenAQ. Automatic retry in 30 seconds.');
+      }
+
+      if (!res.ok) {
+        throw new Error(`Unable to fetch historical measurements for sensor ${sensorId}.`);
+      }
+
+      const data = await res.json();
+      setHistoryMap(prev => ({
+        ...prev,
+        [sensorId]: data.measurements || []
+      }));
+      setHistoryError('');
+    } catch (err) {
+      setHistoryError(err.message || 'Failed to retrieve historical timeline.');
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, [historyMap]);
+
+  // Load initial data and Ambala discovery
   useEffect(() => {
     let isMounted = true;
 
-    async function initialLoad() {
+    async function init() {
+      if (fetchingRef.current) return;
+      fetchingRef.current = true;
+
       try {
-        const [delhiAqRes, ambalaAqRes, delhiLocRes, ambalaLocRes, ambalaStationsRes] = await Promise.all([
-          fetch(`${API_BASE_URL}/api/air-quality/8118`),
-          fetch(`${API_BASE_URL}/api/air-quality/6964`),
-          fetch(`${API_BASE_URL}/api/location/8118`),
-          fetch(`${API_BASE_URL}/api/location/6964`),
+        await Promise.all([
+          fetchStationData(selectedLocationId),
+          currentStation.pm25SensorId ? fetchHistory(currentStation.pm25SensorId) : Promise.resolve(),
           fetch(`${API_BASE_URL}/api/ambala-stations`)
+            .then(r => r.ok ? r.json() : null)
+            .then(data => {
+              if (isMounted && data) setAmbalaDiscovery(data);
+            })
+            .catch(() => {})
         ]);
-
-        if (delhiAqRes.status === 429 || ambalaAqRes.status === 429) {
-          if (isMounted) setRateLimitCountdown(30);
-          throw new Error('Rate limit encountered on OpenAQ. Automatic retry in 30 seconds.');
-        }
-
-        const [delhiAq, ambalaAq, delhiLoc, ambalaLoc, ambalaDisc] = await Promise.all([
-          delhiAqRes.ok ? delhiAqRes.json() : null,
-          ambalaAqRes.ok ? ambalaAqRes.json() : null,
-          delhiLocRes.ok ? delhiLocRes.json() : null,
-          ambalaLocRes.ok ? ambalaLocRes.json() : null,
-          ambalaStationsRes.ok ? ambalaStationsRes.json() : null
-        ]);
-
-        if (!isMounted) return;
-        setDelhiAir(delhiAq);
-        setAmbalaAir(ambalaAq);
-        setDelhiLocation(delhiLoc);
-        setAmbalaLocation(ambalaLoc);
-        setAmbalaDiscovery(ambalaDisc);
-        setError('');
-      } catch (err) {
-        if (isMounted) setError(err.message || 'Error communicating with backend API.');
       } finally {
-        if (isMounted) setLoading(false);
+        fetchingRef.current = false;
       }
     }
 
-    initialLoad();
+    init();
     return () => { isMounted = false; };
-  }, []);
+  }, [selectedLocationId, currentStation.pm25SensorId, fetchStationData, fetchHistory]);
 
-  // Fetch historical data when selected location changes
-  const activeSensorId = selectedLocationId === 8118 ? 23534 : 14258997;
-
-  useEffect(() => {
-    let isMounted = true;
-
-    async function loadHistory() {
-      try {
-        const response = await fetch(`${API_BASE_URL}/api/history/${activeSensorId}`);
-        if (!response.ok) {
-          throw new Error('Unable to fetch historical measurements');
-        }
-        const data = await response.json();
-        if (!isMounted) return;
-        setHistory(data.measurements || []);
-        setHistoryError('');
-      } catch (err) {
-        if (isMounted) setHistoryError(err.message);
-      } finally {
-        if (isMounted) setHistoryLoading(false);
-      }
-    }
-
-    loadHistory();
-    return () => { isMounted = false; };
-  }, [activeSensorId]);
-
-  // Handle rate limit countdown
+  // Rate limit countdown handler
   useEffect(() => {
     if (rateLimitCountdown === null || rateLimitCountdown <= 0) return;
     const timer = setTimeout(() => {
       if (rateLimitCountdown === 1) {
         setRateLimitCountdown(null);
-        fetchAllData();
+        fetchStationData(selectedLocationId, true);
+        if (currentStation.pm25SensorId) {
+          fetchHistory(currentStation.pm25SensorId, true);
+        }
       } else {
         setRateLimitCountdown(rateLimitCountdown - 1);
       }
     }, 1000);
     return () => clearTimeout(timer);
-  }, [rateLimitCountdown]);
+  }, [rateLimitCountdown, selectedLocationId, currentStation.pm25SensorId, fetchStationData, fetchHistory]);
 
-  // Current active station data
-  const currentAir = selectedLocationId === 8118 ? delhiAir : ambalaAir;
-  const currentLocation = selectedLocationId === 8118 ? delhiLocation : ambalaLocation;
-  const currentStationName = selectedLocationId === 8118
-    ? (delhiLocation?.name || 'New Delhi (US Diplomatic Post)')
-    : (ambalaLocation?.name || 'Patti Mehar, Ambala - HSPCB');
+  // Handle city selection change
+  const handleCityChange = (cityName) => {
+    const defaultStation = getDefaultStationForCity(cityName);
+    setSelectedCity(cityName);
+    setSelectedLocationId(defaultStation.id);
+  };
+
+  // Handle station selection change
+  const handleStationSelect = (locationId) => {
+    const station = getStationById(locationId);
+    if (!station) return;
+    setSelectedLocationId(station.id);
+    setSelectedCity(station.cityName);
+  };
+
+  // Active station data
+  const currentAir = airQualityMap[selectedLocationId] || null;
+  const currentLoc = locationMetaMap[selectedLocationId] || currentStation;
+  const currentHistory = currentStation.pm25SensorId
+    ? (historyMap[currentStation.pm25SensorId] || [])
+    : [];
 
   const readings = currentAir?.readings || [];
   const pm25 = readings.find(item => item.pollutant === 'pm25');
@@ -243,9 +368,9 @@ export default function App() {
   const isStale = ageHours !== null && ageHours > 3;
 
   const pm25Snapshot = getSnapshotAdvisory(pm25?.value);
-  const stats24h = calculate24HourStats(history, now);
+  const stats24h = calculate24HourStats(currentHistory, now);
 
-  // Calculate dynamic greeting based on Indian Standard Time (IST)
+  // Dynamic greeting based on Indian Standard Time (IST)
   const istHour = (() => {
     try {
       const timeStr = new Intl.DateTimeFormat('en-IN', {
@@ -266,17 +391,118 @@ export default function App() {
       : 'Good evening';
 
   // Chart data: 24 available readings
-  const chartData = [...history]
+  const chartData = [...currentHistory]
     .filter(item => item.value !== null && Number.isFinite(Number(item.value)))
     .slice(0, 24)
     .reverse();
 
   const maxValue = Math.max(...chartData.map(item => Number(item.value)), 1);
-  const latestHistory = history[0];
+  const latestHistory = currentHistory[0];
 
   return (
     <div className="app">
-      {/* Sidebar Navigation */}
+      {/* Mobile Top Navigation Bar (< 1024px) */}
+      <header className="mobile-header-bar">
+        <div
+          className="mobile-header-brand"
+          onClick={() => {
+            setActiveNav('overview');
+            setMobileMenuOpen(false);
+          }}
+          role="button"
+          tabIndex={0}
+        >
+          <span className="brand-icon">✳</span>
+          <span className="brand-title">BreatheWise</span>
+        </div>
+
+        <div className="mobile-header-actions">
+          <div className="mobile-active-city-badge">
+            <span className="city-dot" style={{ backgroundColor: currentStation.pinColor || '#1b5e20' }}></span>
+            <span>{currentStation.cityName}</span>
+          </div>
+
+          <button
+            type="button"
+            className={`mobile-hamburger-btn ${mobileMenuOpen ? 'open' : ''}`}
+            onClick={() => setMobileMenuOpen(prev => !prev)}
+            aria-label={mobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
+            aria-expanded={mobileMenuOpen}
+          >
+            <span className="hamburger-bar"></span>
+            <span className="hamburger-bar"></span>
+            <span className="hamburger-bar"></span>
+          </button>
+        </div>
+      </header>
+
+      {/* Mobile Navigation Drawer Backdrop & Modal (< 1024px) */}
+      {mobileMenuOpen && (
+        <div
+          className="mobile-nav-backdrop"
+          onClick={() => setMobileMenuOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      <aside className={`mobile-nav-drawer ${mobileMenuOpen ? 'open' : ''}`} aria-label="Mobile Navigation">
+        <div className="mobile-drawer-header">
+          <div className="brand">
+            <span className="brand-icon">✳</span>
+            <span>BreatheWise</span>
+          </div>
+          <button
+            type="button"
+            className="mobile-drawer-close-btn"
+            onClick={() => setMobileMenuOpen(false)}
+            aria-label="Close navigation menu"
+          >
+            ✕
+          </button>
+        </div>
+
+        <p className="menu-label">WORKSPACE</p>
+
+        <nav className="mobile-nav-links">
+          {NAV_ITEMS.map(item => (
+            <button
+              key={item.id}
+              type="button"
+              className={`mobile-nav-item ${activeNav === item.id ? 'active' : ''}`}
+              onClick={() => {
+                setActiveNav(item.id);
+                setMobileMenuOpen(false);
+              }}
+            >
+              <span className="nav-item-icon">{item.icon}</span>
+              <span className="nav-item-text">{item.label}</span>
+              {activeNav === item.id && <span className="nav-item-active-dot">●</span>}
+            </button>
+          ))}
+        </nav>
+
+        <div className="mobile-drawer-footer">
+          <div className="mobile-station-badge">
+            <span className="city-dot" style={{ backgroundColor: currentStation.pinColor || '#1b5e20' }}></span>
+            <div className="mobile-station-text">
+              <strong>{currentStation.cityName}</strong>
+              <small>{currentStation.shortName || currentStation.name}</small>
+            </div>
+          </div>
+          <div className="api-status-row">
+            <span
+              className="live-dot"
+              style={{
+                backgroundColor: loading ? '#e7bd62' : error ? '#ef5350' : '#4caf50'
+              }}
+            ></span>
+            <span>{loading ? 'Syncing OpenAQ...' : error ? 'API Issue' : 'Live Data Connected'}</span>
+          </div>
+          <p className="mobile-footnote">Verified ground observations from OpenAQ v3</p>
+        </div>
+      </aside>
+
+      {/* Desktop Sidebar Navigation (>= 1024px) */}
       <aside className="sidebar">
         <div className="brand">
           <span className="brand-icon">✳</span>
@@ -286,48 +512,16 @@ export default function App() {
         <p className="menu-label">WORKSPACE</p>
 
         <nav>
-          <button
-            type="button"
-            className={`nav-item ${activeNav === 'overview' ? 'active' : ''}`}
-            onClick={() => setActiveNav('overview')}
-          >
-            ▦ Overview
-          </button>
-          <button
-            type="button"
-            className={`nav-item ${activeNav === 'map' ? 'active' : ''}`}
-            onClick={() => setActiveNav('map')}
-          >
-            ⌖ Air Quality Map
-          </button>
-          <button
-            type="button"
-            className={`nav-item ${activeNav === 'trends' ? 'active' : ''}`}
-            onClick={() => setActiveNav('trends')}
-          >
-            ▤ Historical Trends
-          </button>
-          <button
-            type="button"
-            className={`nav-item ${activeNav === 'compare' ? 'active' : ''}`}
-            onClick={() => setActiveNav('compare')}
-          >
-            ⇄ Compare Cities
-          </button>
-          <button
-            type="button"
-            className={`nav-item ${activeNav === 'health' ? 'active' : ''}`}
-            onClick={() => setActiveNav('health')}
-          >
-            ♡ Health & Safety
-          </button>
-          <button
-            type="button"
-            className={`nav-item ${activeNav === 'forecast' ? 'active' : ''}`}
-            onClick={() => setActiveNav('forecast')}
-          >
-            ☼ Forecast
-          </button>
+          {NAV_ITEMS.map(item => (
+            <button
+              key={item.id}
+              type="button"
+              className={`nav-item ${activeNav === item.id ? 'active' : ''}`}
+              onClick={() => setActiveNav(item.id)}
+            >
+              {item.icon} {item.label}
+            </button>
+          ))}
         </nav>
 
         <div className="sidebar-bottom">
@@ -346,30 +540,68 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="main-content">
-        {/* Topbar */}
+        {/* Topbar with Global City & Station Selector */}
         <header className="topbar">
           <div>
             <p className="eyebrow">AIR QUALITY INTELLIGENCE</p>
             <h1>{greeting} 🌿</h1>
-            <p className="subtitle">Welcome to BreatheWise · Real ground observations. Objective data. Evidence-based health guidance.</p>
+            <p className="subtitle">
+              Welcome to BreatheWise · Real ground observations. Objective data. Evidence-based health guidance.
+            </p>
           </div>
 
-          {/* Topbar Station Selector */}
-          <div className="station-selector-header">
-            <span className="location-pin-icon">📍</span>
-            <div className="station-select-wrap">
-              <label htmlFor="stationSelect" className="selector-label">MONITORING SITE:</label>
-              <select
-                id="stationSelect"
-                value={selectedLocationId}
-                onChange={(e) => setSelectedLocationId(Number(e.target.value))}
-                className="station-dropdown"
-              >
-                <option value={8118}>New Delhi (ID: 8118 · Provider: AirNow / U.S. Diplomatic Post)</option>
-                <option value={6964}>
-                  Ambala (ID: 6964 · Patti Mehar · Provider: CPCB / HSPCB {ambalaDiscovery ? '· Within 25 km' : ''})
-                </option>
-              </select>
+          {/* Global City Dropdown & Station Dropdown */}
+          <div className="global-city-selector-wrap">
+            <div className="city-selector-box">
+              <span className="location-pin-icon">📍</span>
+              <div className="city-select-field">
+                <label htmlFor="citySelect" className="selector-label">CITY:</label>
+                <select
+                  id="citySelect"
+                  value={selectedCity}
+                  onChange={(e) => handleCityChange(e.target.value)}
+                  className="city-dropdown"
+                >
+                  {SUPPORTED_CITIES.map(cityName => (
+                    <option key={cityName} value={cityName}>
+                      {cityName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Station dropdown if multiple stations exist in the city, or display the station name */}
+            <div className="station-selector-box">
+              <div className="station-select-field">
+                <label htmlFor="stationSelect" className="selector-label">MONITORING SITE:</label>
+                {stationsInCurrentCity.length > 1 ? (
+                  <select
+                    id="stationSelect"
+                    value={selectedLocationId}
+                    onChange={(e) => handleStationSelect(Number(e.target.value))}
+                    className="station-dropdown"
+                  >
+                    {stationsInCurrentCity.map(station => (
+                      <option key={station.id} value={station.id}>
+                        {station.shortName || station.name} ({station.provider})
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="single-station-label" title={currentStation.name}>
+                    {currentStation.shortName || currentStation.name}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Clear selected city & station indicator */}
+            <div className="city-active-indicator">
+              <span className="city-dot" style={{ backgroundColor: currentStation.pinColor || '#1b5e20' }}></span>
+              <span className="city-indicator-text">
+                <strong>{currentStation.cityName}</strong> · {currentStation.shortName || currentStation.name}
+              </span>
             </div>
           </div>
         </header>
@@ -378,7 +610,17 @@ export default function App() {
         {rateLimitCountdown !== null && (
           <div className="rate-limit-banner">
             <span>⏳ OpenAQ API rate limit reached. Re-querying in {rateLimitCountdown} seconds...</span>
-            <button className="btn-sm" onClick={() => { setRateLimitCountdown(null); fetchAllData(); }}>
+            <button
+              type="button"
+              className="btn-sm"
+              onClick={() => {
+                setRateLimitCountdown(null);
+                fetchStationData(selectedLocationId, true);
+                if (currentStation.pm25SensorId) {
+                  fetchHistory(currentStation.pm25SensorId, true);
+                }
+              }}
+            >
               Retry Now
             </button>
           </div>
@@ -388,7 +630,18 @@ export default function App() {
         {error && rateLimitCountdown === null && (
           <div className="error-banner">
             <span>⚠ {error}</span>
-            <button className="btn-retry-sm" onClick={fetchAllData}>Retry Connection</button>
+            <button
+              type="button"
+              className="btn-retry-sm"
+              onClick={() => {
+                fetchStationData(selectedLocationId, true);
+                if (currentStation.pm25SensorId) {
+                  fetchHistory(currentStation.pm25SensorId, true);
+                }
+              }}
+            >
+              Retry Connection
+            </button>
           </div>
         )}
 
@@ -399,7 +652,7 @@ export default function App() {
             <section className="welcome-banner">
               <div>
                 <p className="banner-label">EVIDENCE-BASED AIR QUALITY INTELLIGENCE</p>
-                <h2>Breathe better.<br />Live informed.</h2>
+                <h2>Breathe better.<br />Live informed in {currentStation.cityName}.</h2>
                 <p>
                   Explore verified physical measurements from ground-level ambient monitors.
                   Track real-world historical particulate concentrations and evaluate personal health guidance.
@@ -412,8 +665,8 @@ export default function App() {
             <section className="section">
               <div className="section-heading">
                 <div>
-                  <h2>Current Air Quality: {currentStationName}</h2>
-                  <p>Observational PM2.5 mass concentration reported by ground sensor</p>
+                  <h2>Current Air Quality: {currentStation.name}</h2>
+                  <p>Observational PM2.5 mass concentration reported by ground sensor in {currentStation.locality}</p>
                 </div>
                 <div className="tags-group">
                   {isStale && <span className="status-tag stale-tag">OLDER MEASUREMENT (&gt;3H)</span>}
@@ -584,7 +837,7 @@ export default function App() {
               <div className="section-heading">
                 <div>
                   <h2>Station Pollutant Levels</h2>
-                  <p>Measurements reported across all active sensors for {currentStationName}</p>
+                  <p>Measurements reported across all active sensors for {currentStation.name}</p>
                 </div>
               </div>
 
@@ -619,8 +872,10 @@ export default function App() {
             <section className="section">
               <div className="section-heading">
                 <div>
-                  <h2>Recent PM2.5 Timeline: {currentStationName}</h2>
-                  <p>Chronological measurements from sensor {activeSensorId}</p>
+                  <h2>Recent PM2.5 Timeline: {currentStation.name}</h2>
+                  <p>
+                    Chronological measurements from sensor {currentStation.pm25SensorId || 'N/A'}
+                  </p>
                 </div>
                 <button
                   type="button"
@@ -647,7 +902,7 @@ export default function App() {
                       </div>
                       <div>
                         <p className="muted">Available data points</p>
-                        <h2>{history.length}</h2>
+                        <h2>{currentHistory.length}</h2>
                       </div>
                       <div>
                         <p className="muted">Data Fetch Timestamp</p>
@@ -673,7 +928,7 @@ export default function App() {
                               className="chart-bar"
                               style={{
                                 height: `${Math.max((val / maxValue) * 100, 3)}%`,
-                                backgroundColor: '#00897b'
+                                backgroundColor: currentStation.pinColor || '#00897b'
                               }}
                             />
                             <span>{hour}h</span>
@@ -698,15 +953,18 @@ export default function App() {
                 <div className="section-heading">
                   <div>
                     <h2>Location Overview</h2>
-                    <p>{currentLocation?.name || 'Monitoring Site'} · Data Source: OpenAQ</p>
+                    <p>
+                      {currentStation.name} · Data Source: OpenAQ ({currentStation.provider})
+                      {ambalaDiscovery && currentStation.cityName === 'Ambala' ? ' · 25 km Discovery Verified' : ''}
+                    </p>
                   </div>
                 </div>
 
                 <div className="map-container">
-                  {currentLocation?.latitude && currentLocation?.longitude ? (
+                  {currentStation.latitude && currentStation.longitude ? (
                     <MapContainer
-                      key={`${currentLocation.latitude}-${currentLocation.longitude}`}
-                      center={[currentLocation.latitude, currentLocation.longitude]}
+                      key={`${currentStation.latitude}-${currentStation.longitude}`}
+                      center={[currentStation.latitude, currentStation.longitude]}
                       zoom={11}
                       style={{ height: '320px', width: '100%', borderRadius: '12px' }}
                     >
@@ -717,20 +975,20 @@ export default function App() {
 
                       {/* Station Marker */}
                       <Marker
-                        position={[currentLocation.latitude, currentLocation.longitude]}
-                        icon={selectedLocationId === 8118 ? pinDelhi : pinAmbala}
+                        position={[currentStation.latitude, currentStation.longitude]}
+                        icon={getStationPin(currentStation)}
                       >
                         <Popup>
-                          <strong>{currentLocation.name}</strong><br />
+                          <strong>{currentStation.name}</strong><br />
                           PM2.5: {pm25 ? `${pm25.value} µg/m³` : 'Reading unavailable'}<br />
-                          Locality: {currentLocation.locality || (selectedLocationId === 8118 ? 'Chanakyapuri, New Delhi' : 'Ambala, Haryana')}<br />
-                          OpenAQ Provider: {currentLocation.provider || (selectedLocationId === 8118 ? 'AirNow' : 'CPCB')}<br />
-                          Station Network: {selectedLocationId === 8118 ? 'U.S. Diplomatic Post Monitor via AirNow' : 'Haryana State Pollution Control Board (HSPCB)'}
+                          Locality: {currentLoc.locality || currentStation.locality}<br />
+                          OpenAQ Provider: {currentStation.provider}<br />
+                          Station Network: {currentStation.network}
                         </Popup>
                       </Marker>
 
                       {/* If Ambala is selected, also show the 25km circle */}
-                      {selectedLocationId === 6964 && (
+                      {currentStation.cityName === 'Ambala' && (
                         <Circle
                           center={[30.378, 76.776]}
                           radius={25000}
@@ -749,15 +1007,15 @@ export default function App() {
                 <div className="section-heading">
                   <div>
                     <h2>Air Quality Navigation</h2>
-                    <p>Detailed modules & insights</p>
+                    <p>Detailed modules & insights for {currentStation.cityName}</p>
                   </div>
                 </div>
 
                 <div className="insight" onClick={() => setActiveNav('compare')} style={{ cursor: 'pointer' }}>
                   <span>⇄</span>
                   <div>
-                    <h3>Compare New Delhi vs Ambala</h3>
-                    <p>Side-by-side comparison with genuine station within 25 km of Ambala (Patti Mehar).</p>
+                    <h3>Compare {currentStation.cityName} with Other Cities</h3>
+                    <p>Side-by-side comparison across all 9 verified Northern Indian cities.</p>
                   </div>
                 </div>
 
@@ -781,7 +1039,7 @@ export default function App() {
                   <span>☼</span>
                   <div>
                     <h3>Forecast Transparency Disclosure</h3>
-                    <p>Honest forecast-unavailable status and atmospheric modeling explanation.</p>
+                    <p>Open-Meteo CAMS atmospheric model forecast for {currentStation.cityName}.</p>
                   </div>
                 </div>
               </div>
@@ -792,38 +1050,43 @@ export default function App() {
         {activeNav === 'map' && (
           <MapView
             activeStationId={selectedLocationId}
-            onSelectStation={(id) => {
-              setSelectedLocationId(id);
-            }}
-            delhiData={delhiAir}
-            ambalaData={ambalaAir}
+            onSelectStation={handleStationSelect}
+            delhiData={airQualityMap[8118]}
+            ambalaData={airQualityMap[6964]}
+            stationsAirMap={airQualityMap}
           />
         )}
 
         {activeNav === 'trends' && (
           <TrendsView
             activeStationId={selectedLocationId}
-            onStationChange={(id) => setSelectedLocationId(id)}
+            nowTimestamp={now}
+            onStationChange={handleStationSelect}
           />
         )}
 
         {activeNav === 'compare' && (
-          <CompareView nowTimestamp={now} />
+          <CompareView
+            nowTimestamp={now}
+            activeStationId={selectedLocationId}
+          />
         )}
 
         {activeNav === 'health' && (
           <HealthView
             currentPm25={pm25 ? pm25.value : null}
             stats24h={stats24h}
-            stationName={currentStationName}
+            stationName={currentStation.name}
+            cityName={currentStation.cityName}
           />
         )}
 
-                {activeNav === 'forecast' && (
+        {activeNav === 'forecast' && (
           <ForecastView
-            latitude={currentLocation?.latitude}
-            longitude={currentLocation?.longitude}
-            stationName={currentStationName}
+            latitude={currentStation.latitude}
+            longitude={currentStation.longitude}
+            stationName={currentStation.name}
+            cityName={currentStation.cityName}
           />
         )}
 
@@ -831,7 +1094,7 @@ export default function App() {
         <footer>
           <div className="footer-content">
             <p><strong>BreatheWise</strong> · Verified observations. Model-based forecasts. Clear scientific insights.</p>
-             <p>Observational data powered by OpenAQ v3. Air quality forecasts powered by Open-Meteo.</p>
+            <p>Observational data powered by OpenAQ v3. Air quality forecasts powered by Open-Meteo.</p>
             <p className="footer-disclaimer">
               Scientific Notice: PM2.5 concentration in µg/m³ measures particulate mass density.
               It is distinct from the composite Air Quality Index (AQI), which is calculated via official non-linear breakpoint equations.

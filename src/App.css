@@ -572,97 +572,6 @@ footer {
   padding: 20px 0;
 }
 
-@media (max-width: 850px) {
-  .sidebar {
-    width: 190px;
-    padding: 22px 13px;
-  }
-
-  .main-content {
-    padding: 25px 20px;
-  }
-
-  .lower-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 600px) {
-  .app {
-    display: block;
-  }
-
-  .sidebar {
-    width: 100%;
-    max-width: 100%;
-    box-sizing: border-box;
-    padding: 15px;
-  }
-
-  .brand {
-    margin-bottom: 12px;
-  }
-
-  .sidebar nav {
-    display: flex;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    gap: 8px;
-    padding-bottom: 4px;
-  }
-
-  .nav-item {
-    white-space: nowrap;
-    padding: 9px 13px;
-    font-size: 12px;
-  }
-
-  .sidebar-bottom {
-    display: none;
-  }
-
-  .main-content {
-    padding: 18px 14px;
-    width: 100%;
-    max-width: 100%;
-    box-sizing: border-box;
-  }
-
-  .topbar {
-    align-items: flex-start;
-    flex-direction: column;
-    width: 100%;
-    gap: 14px;
-  }
-
-  .station-selector-header {
-    width: 100%;
-    box-sizing: border-box;
-  }
-
-  .welcome-banner {
-    padding: 23px;
-  }
-
-  .welcome-banner h2 {
-    font-size: 27px;
-  }
-
-  .banner-art {
-    font-size: 48px;
-    padding: 0;
-  }
-
-  .pollutant-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-
-  .section-heading {
-    align-items: flex-start;
-  }
-}
-
-
 .history-panel {
   padding: 24px;
 }
@@ -727,7 +636,16 @@ footer {
    ENHANCED BREATHEWISE UI COMPONENTS & MODULES
    ========================================================================== */
 
-/* Topbar Station Selector */
+/* Topbar Global City & Station Selector */
+.global-city-selector-wrap {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.city-selector-box,
+.station-selector-box,
 .station-selector-header {
   display: flex;
   align-items: center;
@@ -739,10 +657,20 @@ footer {
   box-shadow: 0 2px 8px rgba(0,0,0,0.04);
 }
 
-.location-pin-icon {
-  font-size: 18px;
+.city-selector-box:focus-within,
+.station-selector-box:focus-within,
+.station-selector-header:focus-within {
+  border-color: #1b4937;
+  box-shadow: 0 0 0 2px rgba(27, 73, 55, 0.12);
 }
 
+.location-pin-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.city-select-field,
+.station-select-field,
 .station-select-wrap {
   display: flex;
   flex-direction: column;
@@ -755,8 +683,10 @@ footer {
   font-weight: 800;
   letter-spacing: 1px;
   color: #7b8e80;
+  text-transform: uppercase;
 }
 
+.city-dropdown,
 .station-dropdown {
   border: none;
   background: transparent;
@@ -771,6 +701,182 @@ footer {
   text-overflow: ellipsis;
   overflow: hidden;
   white-space: nowrap;
+}
+
+.single-station-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1b4937;
+  padding: 2px 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.city-active-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #f0f7f2;
+  border: 1px solid #cfe2d5;
+  border-radius: 20px;
+  padding: 6px 14px;
+  font-size: 12px;
+  color: #1b4937;
+}
+
+.city-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.city-indicator-text {
+  white-space: nowrap;
+}
+
+/* Compare View Station Selectors Bar */
+.compare-selectors-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 22px;
+  flex-wrap: wrap;
+}
+
+.compare-select-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: white;
+  border: 1px solid #d8e2d4;
+  border-radius: 12px;
+  padding: 10px 14px;
+  flex: 1;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+}
+
+.compare-select-block:focus-within {
+  border-color: #1b4937;
+  box-shadow: 0 0 0 2px rgba(27, 73, 55, 0.12);
+}
+
+.compare-select-block select {
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  color: #1b4937;
+  outline: none;
+  cursor: pointer;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.btn-swap-locations {
+  background: #eef5ec;
+  border: 1px solid #c7dcc3;
+  color: #1b4937;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  border-radius: 10px;
+  padding: 12px 18px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-swap-locations:hover {
+  background: #1b4937;
+  color: white;
+  border-color: #1b4937;
+}
+
+/* MapView Enhanced City Filters & Markers */
+.selected-station-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #e8f5e9;
+  border: 1px solid #a5d6a7;
+  border-radius: 20px;
+  padding: 6px 14px;
+  font-size: 12px;
+  color: #1b5e20;
+}
+
+.city-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #eef2ec;
+}
+
+.city-pill-btn {
+  background: #f1f6f0;
+  border: 1px solid #d2ded0;
+  color: #3b5443;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 16px;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.city-pill-btn:hover {
+  background: #e2ede0;
+  border-color: #1b4937;
+  color: #1b4937;
+}
+
+.city-pill-btn.active {
+  background: #1b4937;
+  border-color: #1b4937;
+  color: white;
+}
+
+.station-city-tag {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: #55725e;
+  padding-left: 6px;
+  margin-bottom: 3px;
+}
+
+.sidebar-subtitle {
+  font-size: 12px;
+  color: #6d8274;
+  margin: 2px 0 0;
+}
+
+.map-popup-card .popup-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin-bottom: 6px;
 }
 
 /* Sidebar Navigation Button Resets */
@@ -1265,61 +1371,42 @@ footer {
 }
 
 /* ==========================================================================
-   TRENDS VIEW STYLING
+   TRENDS VIEW STYLING (REDESIGNED)
    ========================================================================== */
-.station-selector-group {
+.trends-view {
   display: flex;
-  gap: 8px;
+  flex-direction: column;
+  gap: 0;
 }
 
-.station-btn {
-  background: white;
-  border: 1px solid #d2e0cf;
-  color: #3b5947;
-  padding: 8px 16px;
-  border-radius: 10px;
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.station-btn.active {
-  background: #173c30;
-  color: white;
-  border-color: #173c30;
-}
-
-.trends-controls-bar {
+.trends-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  background: white;
-  border: 1px solid #e1eadf;
-  border-radius: 14px;
-  padding: 16px 20px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 16px;
   margin-bottom: 20px;
 }
 
-.station-badge {
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: 1px;
-  color: #4a755d;
-  display: block;
+.trends-header h2 {
+  font-size: 24px;
+  color: #173c30;
+  margin: 0;
+  letter-spacing: -0.3px;
 }
 
-.station-info-header h3 {
-  font-size: 17px;
-  color: #1e3a2b;
-  margin: 3px 0;
+.trends-subtitle {
+  font-size: 13px;
+  color: #5d7566;
+  margin: 4px 0 0;
 }
 
+/* Time-Range Tabs */
 .view-mode-toggle {
   display: flex;
   background: #edf3ea;
-  border-radius: 8px;
+  border: 1px solid #dbe6d8;
+  border-radius: 10px;
   padding: 4px;
   gap: 4px;
 }
@@ -1331,233 +1418,478 @@ footer {
   font-size: 12px;
   font-weight: 700;
   color: #4d6856;
-  padding: 6px 14px;
-  border-radius: 6px;
+  padding: 8px 16px;
+  border-radius: 8px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.toggle-btn:hover {
+  color: #173c30;
 }
 
 .toggle-btn.active {
   background: white;
   color: #173c30;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
 }
 
-.stats-row {
+/* Compact Selected Station Info Header Card */
+.trends-station-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  background: white;
+  border: 1px solid #dce7db;
+  border-radius: 12px;
+  padding: 14px 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.02);
+}
+
+.trends-station-primary {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.trends-city-badge {
+  color: white;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.trends-station-name-wrap {
+  min-width: 0;
+}
+
+.trends-station-name-wrap h3 {
+  font-size: 16px;
+  color: #173c30;
+  margin: 0;
+  font-weight: 700;
+}
+
+.trends-station-locality {
+  font-size: 12px;
+  color: #637b6c;
+  margin: 3px 0 0;
+}
+
+.trends-station-meta-tags {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.trends-meta-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #f1f6ef;
+  border: 1px solid #d5e3d2;
+  border-radius: 8px;
+  padding: 5px 11px;
+  font-size: 11px;
+  color: #2b4938;
+}
+
+.meta-pill-label {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  color: #7a8e80;
+}
+
+.status-pill-verified {
+  background: #e8f5e9;
+  border-color: #c8e6c9;
+  color: #1e5730;
+  font-weight: 700;
+}
+
+/* Four Compact Metric Cards */
+.trends-metrics-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 16px;
-  margin-bottom: 24px;
+  margin-bottom: 22px;
 }
 
-.stat-card {
+.trends-metric-card {
   background: white;
-  border: 1px solid #e1eadf;
+  border: 1px solid #dce7db;
   border-radius: 12px;
-  padding: 18px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.02);
+  transition: all 0.2s ease;
 }
 
-.stat-label {
+.trends-metric-card:hover {
+  border-color: #bdd1bc;
+  box-shadow: 0 4px 12px rgba(23, 60, 48, 0.05);
+}
+
+.metric-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.metric-card-label {
   font-size: 9px;
   font-weight: 800;
   letter-spacing: 1px;
   color: #7b8e80;
-  display: block;
+  text-transform: uppercase;
+}
+
+.metric-unit-tag {
+  font-size: 10px;
+  font-weight: 700;
+  color: #5c7463;
+  background: #edf4ec;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.metric-card-value {
+  font-size: 28px;
+  font-weight: 800;
+  color: #173c30;
+  line-height: 1.15;
   margin-bottom: 6px;
 }
 
-.stat-val {
-  font-size: 26px;
-  font-weight: 800;
-  color: #1e3a2b;
-  margin-bottom: 4px;
-}
-
-.stat-val small {
-  font-size: 13px;
-  font-weight: 600;
-  color: #7b8e80;
-}
-
-.stat-good {
+.metric-card-value.text-min {
   color: #2e7d32;
 }
 
-.stat-high {
+.metric-card-value.text-max {
   color: #c62828;
 }
 
-.stat-sub {
+.metric-card-sub {
   font-size: 11px;
-  color: #87998c;
+  color: #6d8373;
+  line-height: 1.35;
 }
 
+/* Enhanced Chart Panel */
 .chart-panel {
-  padding: 24px;
-  margin-bottom: 24px;
+  background: white;
+  border: 1px solid #dce7db;
+  border-radius: 14px;
+  padding: 22px 24px;
+  margin-bottom: 22px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
 }
 
 .chart-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 14px;
   margin-bottom: 16px;
 }
 
 .chart-header h4 {
   font-size: 16px;
-  margin: 0 0 4px;
-  color: #1e3a2b;
+  color: #173c30;
+  margin: 0 0 3px;
+  font-weight: 700;
 }
 
 .chart-subtitle {
   font-size: 12px;
-  color: #7a8e80;
-  margin-bottom: 0;
+  color: #637b6c;
+  margin: 0;
 }
 
-.fetch-indicator {
+.chart-current-chip {
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+}
+
+.chip-active-val {
+  background: #173c30;
+  color: white;
+  font-size: 12px;
+  padding: 6px 14px;
+  border-radius: 8px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+  animation: fadeIn 0.15s ease;
+}
+
+.chip-active-val strong {
+  color: #b9e3a6;
+}
+
+.chip-idle-text {
   font-size: 11px;
-  color: #637a6b;
-  background: #f1f7ef;
-  padding: 6px 12px;
+  color: #7a8e80;
+  background: #f1f6ef;
+  border: 1px solid #d5e3d2;
+  padding: 5px 12px;
   border-radius: 6px;
 }
 
-.chart-tooltip-display {
+/* Chart Plot Area with Y-Axis */
+.chart-plot-wrapper {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  background: #173c30;
-  color: white;
-  padding: 8px 14px;
-  border-radius: 8px;
-  font-size: 12px;
-  margin-bottom: 16px;
-  animation: fadeIn 0.15s ease-in-out;
-}
-
-.tooltip-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-}
-
-.tooltip-cat {
-  color: #b8e3a5;
-}
-
-.tooltip-time {
-  margin-left: auto;
-  color: #d1e5d8;
-  font-size: 11px;
-}
-
-.interactive-chart-container {
-  display: flex;
-  height: 240px;
   gap: 12px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid #e1eadf;
-  margin-bottom: 16px;
+  height: 280px;
+  margin: 14px 0 10px;
 }
 
 .chart-y-axis {
+  width: 32px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   font-size: 10px;
-  color: #8fa093;
-  width: 25px;
+  font-weight: 600;
+  color: #7a8e80;
   text-align: right;
-  padding-right: 4px;
+  padding: 4px 4px 22px 0;
+  user-select: none;
 }
 
-.chart-bars-wrap {
+.chart-plot-area {
+  flex: 1;
+  position: relative;
+  height: 100%;
+  border-left: 1px solid #dce7db;
+  border-bottom: 1px solid #dce7db;
+}
+
+.grid-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1px dashed #e7efe5;
+  pointer-events: none;
+}
+
+.cpcb-reference-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1.5px dashed #f57f17;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.cpcb-line-tag {
+  position: absolute;
+  right: 8px;
+  top: -15px;
+  font-size: 9px;
+  font-weight: 700;
+  color: #995000;
+  background: rgba(255, 253, 231, 0.95);
+  padding: 1px 6px;
+  border-radius: 3px;
+  border: 1px solid #ffe082;
+  letter-spacing: 0.3px;
+}
+
+.chart-bars-track {
   display: flex;
-  flex: 1;
   align-items: flex-end;
+  width: 100%;
+  height: 100%;
+  position: relative;
+  z-index: 3;
   gap: 4px;
-  overflow-x: auto;
+  padding: 0 4px;
 }
 
-.interactive-bar-col {
+.chart-bar-slot {
   flex: 1;
-  min-width: 14px;
+  min-width: 12px;
   height: 100%;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
   align-items: center;
   cursor: pointer;
-  padding: 2px;
-  transition: all 0.2s;
+  padding: 0 1px;
+  transition: all 0.15s ease;
 }
 
-.interactive-bar-col:hover {
-  background: #eef5eb;
-  border-radius: 4px;
+.chart-bar-slot:hover .bar-track-fill {
+  filter: brightness(1.12);
+  box-shadow: 0 0 6px rgba(0, 0, 0, 0.2);
 }
 
-.bar-track {
+.bar-track-outer {
   width: 100%;
-  height: calc(100% - 20px);
+  height: calc(100% - 22px);
   display: flex;
   align-items: flex-end;
 }
 
-.colored-bar {
+.bar-track-fill {
   width: 100%;
   border-radius: 4px 4px 0 0;
   transition: height 0.3s ease;
 }
 
-.bar-axis-label {
-  font-size: 9px;
-  color: #7a8e80;
+.chart-x-label {
+  height: 18px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #637b6c;
   margin-top: 4px;
+  white-space: nowrap;
 }
 
-.chart-legend {
+/* Legend & Context Row */
+.chart-legend-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 14px;
-  padding: 12px 0 6px;
-  font-size: 11px;
+  gap: 12px;
+  padding: 14px 0 8px;
+  border-top: 1px solid #edf4ec;
+  margin-top: 12px;
 }
 
-.legend-title {
+.legend-head {
+  font-size: 11px;
   font-weight: 700;
   color: #2b4938;
 }
 
-.legend-item {
+.legend-chip {
   display: flex;
   align-items: center;
-  gap: 6px;
-}
-
-.legend-color-box {
-  width: 12px;
-  height: 12px;
-  border-radius: 3px;
-}
-
-.legend-name {
-  font-weight: 600;
-  color: #3b5444;
-}
-
-.legend-range {
-  color: #7b8e80;
-}
-
-.chart-footer-note {
+  gap: 5px;
   font-size: 11px;
-  color: #7b8e80;
-  margin-top: 10px;
-  margin-bottom: 0;
+  color: #4a6352;
+}
+
+.legend-color-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.chart-footer-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  font-size: 11px;
+  color: #7a8e80;
+  padding-top: 8px;
+}
+
+.chart-footer-meta strong {
+  color: #2b4938;
+}
+
+/* 5. Scientific Accuracy: Compact Collapsible Section */
+.scientific-collapsible {
+  background: white;
+  border: 1px solid #dce7db;
+  border-radius: 12px;
+  margin-bottom: 24px;
+  overflow: hidden;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.02);
+  transition: all 0.2s ease;
+}
+
+.scientific-summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 18px;
+  cursor: pointer;
+  user-select: none;
+  background: #fcfdfb;
+  list-style: none;
+}
+
+.scientific-summary::-webkit-details-marker {
+  display: none;
+}
+
+.summary-icon {
+  font-size: 16px;
+  color: #173c30;
+  flex-shrink: 0;
+}
+
+.summary-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #173c30;
+  flex: 1;
+}
+
+.summary-badge {
+  font-size: 10px;
+  font-weight: 700;
+  color: #2e7d32;
+  background: #e8f5e9;
+  border: 1px solid #c8e6c9;
+  padding: 2px 8px;
+  border-radius: 12px;
+  white-space: nowrap;
+}
+
+.summary-chevron {
+  font-size: 11px;
+  color: #7a8e80;
+  transition: transform 0.2s ease;
+}
+
+.scientific-collapsible[open] .summary-chevron {
+  transform: rotate(180deg);
+}
+
+.scientific-content {
+  padding: 14px 18px 18px;
+  border-top: 1px solid #edf4ec;
+  background: white;
+}
+
+.scientific-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+
+.scientific-item strong {
+  font-size: 12px;
+  color: #173c30;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.scientific-item p {
+  font-size: 12px;
+  color: #4a6352;
+  margin: 0;
+  line-height: 1.55;
 }
 
 /* ==========================================================================
@@ -2122,79 +2454,362 @@ footer {
   background: #255a47;
 }
 
-/* Responsive Overrides */
-@media (max-width: 1024px) {
-  .dual-metric-row {
-    grid-template-columns: 1fr;
-  }
-  .compare-grid, .map-layout-grid, .health-actions-grid, .integrity-grid {
-    grid-template-columns: 1fr;
-  }
-  .stats-row {
-    grid-template-columns: repeat(2, 1fr);
-  }
+/* ==========================================================================
+   BREATHEWISE COMPREHENSIVE RESPONSIVE DESIGN SYSTEM
+   Breakpoints:
+   - Small mobile: 320px–375px
+   - Standard mobile: 376px–480px
+   - Large mobile: 481px–767px
+   - Tablet: 768px–1023px
+   - Laptop: 1024px–1439px
+   - Desktop: 1440px and above
+   ========================================================================== */
+
+/* Universal Responsive Base Settings */
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
 }
 
-@media (max-width: 600px) {
-  .station-selector-header {
-    width: 100%;
-  }
-  .dual-metric-row {
-    grid-template-columns: 1fr;
-    gap: 14px;
-  }
-  .aqi-card {
-    padding: 18px 14px;
-  }
-  .metric-primary-block, .metric-snapshot-block {
-    padding: 16px 14px;
-  }
-  .aqi-value {
-    font-size: 38px;
-  }
-  .snapshot-value {
-    font-size: 28px;
-  }
-  .aqi-circle {
-    width: 76px;
-    height: 76px;
-    min-width: 76px;
-    min-height: 76px;
-    border-width: 5px;
-  }
-  .aqi-circle span {
-    font-size: 17px;
-  }
-  .timestamp-metrics {
-    grid-template-columns: 1fr;
-  }
-  .health-status-banner {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 16px;
-  }
-  .health-status-value-box {
-    border-left: none;
-    border-top: 1px solid rgba(0,0,0,0.08);
-    padding-left: 0;
-    padding-top: 14px;
-    width: 100%;
-    text-align: left;
-  }
-  .forecast-hero-card {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-  .source-item {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 12px;
-  }
-  .btn-external {
-    margin-left: 0;
-  }
+body.nav-drawer-open {
+  overflow: hidden;
 }
 
+#root, .app {
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+/* ==========================================================================
+   MOBILE NAVIGATION & CORE RESPONSIVE COMPONENT STYLES
+   ========================================================================== */
+
+/* Mobile Top Navigation Bar (Hidden on Desktop >= 1024px) */
+.mobile-header-bar {
+  display: none;
+  position: sticky;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  background: #173c30;
+  color: white;
+  padding: 12px 18px;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 2px 12px rgba(15, 33, 26, 0.2);
+}
+
+.mobile-header-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: 'Manrope', sans-serif;
+  font-size: 18px;
+  font-weight: 800;
+  color: white;
+  cursor: pointer;
+  user-select: none;
+}
+
+.mobile-header-brand .brand-icon {
+  color: #b8e3a5;
+  font-size: 24px;
+}
+
+.mobile-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.mobile-active-city-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 16px;
+  padding: 5px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  color: white;
+}
+
+.mobile-hamburger-btn {
+  background: transparent;
+  border: none;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: background-color 0.2s ease;
+}
+
+.mobile-hamburger-btn:hover,
+.mobile-hamburger-btn:focus-visible {
+  background: rgba(255, 255, 255, 0.12);
+  outline: none;
+}
+
+.hamburger-bar {
+  display: block;
+  width: 22px;
+  height: 2px;
+  background-color: #ffffff;
+  border-radius: 2px;
+  transition: transform 0.24s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease;
+}
+
+.mobile-hamburger-btn.open .hamburger-bar:nth-child(1) {
+  transform: translateY(7px) rotate(45deg);
+}
+
+.mobile-hamburger-btn.open .hamburger-bar:nth-child(2) {
+  opacity: 0;
+}
+
+.mobile-hamburger-btn.open .hamburger-bar:nth-child(3) {
+  transform: translateY(-7px) rotate(-45deg);
+}
+
+/* Mobile Nav Drawer & Backdrop */
+.mobile-nav-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 33, 26, 0.65);
+  backdrop-filter: blur(2px);
+  z-index: 1050;
+  animation: fadeInBackdrop 0.2s ease;
+}
+
+@keyframes fadeInBackdrop {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.mobile-nav-drawer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: min(320px, 86vw);
+  background: #173c30;
+  color: white;
+  z-index: 1100;
+  transform: translateX(-100%);
+  transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  flex-direction: column;
+  padding: 24px 20px;
+  box-shadow: 4px 0 28px rgba(0, 0, 0, 0.35);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  box-sizing: border-box;
+}
+
+.mobile-nav-drawer.open {
+  transform: translateX(0);
+}
+
+.mobile-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+
+.mobile-drawer-header .brand {
+  margin-bottom: 0;
+}
+
+.mobile-drawer-close-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #d4e3d9;
+  font-size: 18px;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 0.18s;
+}
+
+.mobile-drawer-close-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+}
+
+.mobile-nav-links {
+  display: grid;
+  gap: 8px;
+}
+
+.mobile-nav-item {
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 16px;
+  border-radius: 10px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: #e0ece5;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 15px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  user-select: none;
+}
+
+.mobile-nav-item:hover {
+  background: #234c3d;
+  color: #ffffff;
+}
+
+.mobile-nav-item.active {
+  background: #315b49;
+  color: #c8f0b5;
+  border-color: rgba(200, 240, 181, 0.25);
+  font-weight: 700;
+}
+
+.nav-item-icon {
+  font-size: 18px;
+  width: 22px;
+  display: inline-flex;
+  justify-content: center;
+}
+
+.nav-item-text {
+  flex: 1;
+}
+
+.nav-item-active-dot {
+  font-size: 10px;
+  color: #b8e3a5;
+}
+
+.mobile-drawer-footer {
+  margin-top: auto;
+  padding-top: 24px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.mobile-station-badge {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+}
+
+.mobile-station-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.mobile-station-text strong {
+  font-size: 13px;
+  color: white;
+}
+
+.mobile-station-text small {
+  font-size: 11px;
+  color: #a4bcae;
+}
+
+.mobile-footnote {
+  font-size: 10px;
+  color: #8fa89a;
+  margin: 8px 0 0;
+}
+
+/* Map Responsive Elements */
+.leaflet-map-responsive {
+  width: 100%;
+  height: 520px;
+  border-radius: 12px;
+}
+
+.mobile-station-list-toggle-btn {
+  display: none;
+  width: 100%;
+  padding: 12px 16px;
+  min-height: 44px;
+  margin: 12px 0 16px;
+  background: #eef5ec;
+  border: 1px solid #c7dcc3;
+  border-radius: 10px;
+  color: #1b4937;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.mobile-station-list-toggle-btn:hover {
+  background: #1b4937;
+  color: white;
+}
+
+.map-stations-body {
+  display: block;
+}
+
+/* Forecast Responsive Elements */
+.forecast-charts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 18px;
+}
+
+.forecast-chart-panel {
+  padding: 20px;
+  min-width: 0;
+}
+
+.forecast-chart-track {
+  display: flex;
+  align-items: flex-end;
+  gap: 5px;
+  height: 190px;
+  padding-top: 20px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Universal table responsiveness */
+.table-responsive {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin-bottom: 8px;
+}
 
 /* Concentration Category Disclaimers */
 .concentration-disclaimer-note {
@@ -2220,8 +2835,55 @@ footer {
   font-style: italic;
 }
 
-/* Responsive Desktop Optimization (1366x768 and compact laptops) */
-@media (max-width: 1440px), (max-height: 820px) {
+/* ==========================================================================
+   BREAKPOINT 1: WIDESCREEN DESKTOP (1440px and above)
+   ========================================================================== */
+@media (min-width: 1440px) {
+  .main-content {
+    max-width: 1540px;
+    padding: 38px 46px;
+  }
+
+  .sidebar {
+    width: 250px;
+  }
+
+  .welcome-banner h2 {
+    font-size: 36px;
+  }
+
+  .aqi-value {
+    font-size: 52px;
+  }
+
+  .leaflet-map-responsive {
+    height: 540px;
+  }
+}
+
+@media (min-width: 1800px) {
+  .main-content {
+    max-width: 1680px;
+    padding: 42px 52px;
+  }
+
+  .welcome-banner h2 {
+    font-size: 40px;
+  }
+
+  .aqi-value {
+    font-size: 58px;
+  }
+
+  .interactive-chart-container {
+    height: 260px;
+  }
+}
+
+/* ==========================================================================
+   BREAKPOINT 2: LAPTOP / COMPACT DESKTOP (1024px to 1439px)
+   ========================================================================== */
+@media (min-width: 1024px) and (max-width: 1439px) {
   .sidebar {
     width: 220px;
     padding: 24px 16px;
@@ -2234,20 +2896,15 @@ footer {
 
   .main-content {
     padding: 24px 30px;
-  }
-
-  .topbar {
-    margin-bottom: 20px;
+    max-width: 100%;
   }
 
   .welcome-banner {
     padding: 22px 28px;
-    margin-bottom: 22px;
   }
 
   .welcome-banner h2 {
     font-size: 28px;
-    margin-bottom: 8px;
   }
 
   .banner-art {
@@ -2255,70 +2912,668 @@ footer {
     padding: 10px 20px;
   }
 
-  .section {
-    margin-bottom: 22px;
-  }
-
   .aqi-card {
     padding: 20px 24px;
   }
 
   .aqi-value {
-    font-size: 46px;
+    font-size: 44px;
   }
 
-  .aqi-circle {
-    width: 90px;
-    height: 90px;
+  .leaflet-map-responsive {
+    height: 480px;
   }
 
-  .pollutant-grid {
+  .map-layout-grid {
+    grid-template-columns: 1.7fr 1fr;
+    gap: 18px;
+  }
+
+  .trends-metrics-grid {
+    grid-template-columns: repeat(4, 1fr);
     gap: 12px;
   }
 
-  .pollutant-card {
-    padding: 15px;
+  .compare-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
   }
 
-  .pollutant-card h3 {
-    font-size: 23px;
-    margin: 8px 0 2px;
-  }
-
-  .stats-row {
-    gap: 12px;
-    margin-bottom: 18px;
-  }
-
-  .stat-card {
-    padding: 14px 16px;
-  }
-
-  .stat-val {
-    font-size: 22px;
-  }
-
-  .interactive-chart-container {
-    height: 200px;
+  .health-actions-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
   }
 }
 
-/* Widescreen Desktop Optimization (1920x1080) */
-@media (min-width: 1800px) {
+/* ==========================================================================
+   BREAKPOINT 3: TABLET (768px to 1023px)
+   ========================================================================== */
+@media (max-width: 1023px) {
+  .app {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+  }
+
+  .sidebar {
+    display: none !important;
+  }
+
+  .mobile-header-bar {
+    display: flex;
+  }
+
   .main-content {
-    max-width: 1600px;
-    padding: 40px 50px;
+    padding: 24px 22px;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  .topbar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 22px;
+  }
+
+  .global-city-selector-wrap {
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .city-selector-box,
+  .station-selector-box {
+    flex: 1 1 240px;
+    min-width: 200px;
+  }
+
+  .dual-metric-row {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .pollutant-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+  }
+
+  .lower-grid {
+    grid-template-columns: 1fr;
+    gap: 18px;
+  }
+
+  .stats-row {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  /* Map Tablet Layout */
+  .map-layout-grid {
+    grid-template-columns: 1fr;
+    gap: 18px;
+  }
+
+  .leaflet-map-responsive {
+    height: 400px;
+  }
+
+  .mobile-station-list-toggle-btn {
+    display: flex;
+  }
+
+  .map-stations-body {
+    display: none;
+  }
+
+  .map-stations-body.mobile-visible {
+    display: block;
+    animation: fadeInBody 0.22s ease;
+  }
+
+  .station-cards-stack {
+    max-height: 380px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Trends Tablet Layout */
+  .trends-metrics-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  /* Compare Tablet Layout */
+  .compare-grid {
+    grid-template-columns: 1fr;
+    gap: 18px;
+  }
+
+  /* Health & Safety Tablet Layout */
+  .health-actions-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+  }
+
+  /* Forecast Tablet Layout */
+  .forecast-charts-grid {
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 16px;
+  }
+}
+
+@keyframes fadeInBody {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ==========================================================================
+   BREAKPOINT 4: LARGE MOBILE (481px to 767px)
+   ========================================================================== */
+@media (max-width: 767px) {
+  .main-content {
+    padding: 18px 16px;
+  }
+
+  .welcome-banner {
+    padding: 20px 22px;
+    margin-bottom: 20px;
   }
 
   .welcome-banner h2 {
-    font-size: 38px;
+    font-size: clamp(22px, 5.5vw, 28px);
+    margin-bottom: 8px;
+  }
+
+  .banner-art {
+    font-size: 52px;
+    padding: 0 10px;
+  }
+
+  .section-heading {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .section-heading h2 {
+    font-size: 17px;
+  }
+
+  .tags-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .aqi-card {
+    padding: 18px 16px;
+    border-radius: 14px;
+    margin-bottom: 20px;
   }
 
   .aqi-value {
-    font-size: 58px;
+    font-size: clamp(36px, 8vw, 44px);
   }
 
-  .interactive-chart-container {
-    height: 260px;
+  .snapshot-value {
+    font-size: 30px;
+  }
+
+  .aqi-circle {
+    width: 78px;
+    height: 78px;
+    min-width: 78px;
+    min-height: 78px;
+    border-width: 6px;
+  }
+
+  .aqi-circle span {
+    font-size: 18px;
+  }
+
+  .pollutant-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+
+  .pollutant-card {
+    padding: 14px;
+  }
+
+  .pollutant-card h3 {
+    font-size: 22px;
+    margin: 8px 0 2px;
+  }
+
+  .leaflet-map-responsive {
+    height: 340px;
+  }
+
+  /* Compare View */
+  .compare-selectors-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .btn-swap-locations {
+    align-self: center;
+    width: 100%;
+    justify-content: center;
+    min-height: 44px;
+  }
+
+  /* Trends View */
+  .trends-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .view-mode-toggle {
+    width: 100%;
+    display: flex;
+  }
+
+  .view-mode-toggle .toggle-btn {
+    flex: 1;
+    text-align: center;
+    min-height: 42px;
+    padding: 8px 12px;
+  }
+
+  .trends-station-card {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 14px;
+  }
+
+  .trends-station-meta-tags {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .chart-panel {
+    padding: 16px 12px;
+  }
+
+  .chart-y-axis {
+    width: 38px;
+    font-size: 10px;
+  }
+
+  /* Health & Safety */
+  .health-status-banner {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 18px 16px;
+  }
+
+  .health-status-value-box {
+    border-left: none;
+    border-top: 1px solid rgba(0, 0, 0, 0.08);
+    padding-left: 0;
+    padding-top: 14px;
+    width: 100%;
+    text-align: left;
+  }
+
+  .health-val-num {
+    font-size: 40px;
+  }
+
+  .health-actions-grid {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  /* Forecast View */
+  .forecast-hero-card {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 18px 16px;
+  }
+
+  .forecast-charts-grid {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+}
+
+/* ==========================================================================
+   BREAKPOINT 5: STANDARD MOBILE (376px to 480px)
+   ========================================================================== */
+@media (max-width: 480px) {
+  .mobile-header-bar {
+    padding: 10px 14px;
+  }
+
+  .mobile-header-brand .brand-title {
+    font-size: 17px;
+  }
+
+  .mobile-active-city-badge {
+    padding: 4px 9px;
+    font-size: 10px;
+  }
+
+  .main-content {
+    padding: 15px 12px;
+  }
+
+  .welcome-banner {
+    padding: 16px 16px;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .welcome-banner h2 {
+    font-size: 24px;
+  }
+
+  .banner-art {
+    display: none;
+  }
+
+  .global-city-selector-wrap {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .city-selector-box,
+  .station-selector-box {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px 12px;
+  }
+
+  .city-dropdown,
+  .station-dropdown,
+  .compare-select-block select {
+    font-size: 16px; /* Prevents auto-zoom in mobile webkit */
+  }
+
+  .city-active-indicator {
+    align-self: flex-start;
+    max-width: 100%;
+    box-sizing: border-box;
+    font-size: 11px;
+    padding: 5px 10px;
+  }
+
+  .city-indicator-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .metric-primary-block,
+  .metric-snapshot-block {
+    padding: 16px 14px;
+  }
+
+  .metric-primary-header {
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .aqi-value {
+    font-size: 38px;
+  }
+
+  .snapshot-value {
+    font-size: 28px;
+  }
+
+  .aqi-circle {
+    width: 74px;
+    height: 74px;
+    min-width: 74px;
+    min-height: 74px;
+    border-width: 5px;
+  }
+
+  .aqi-circle span {
+    font-size: 16px;
+  }
+
+  .pollutant-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+
+  .pollutant-card {
+    padding: 12px 10px;
+  }
+
+  .pollutant-card h3 {
+    font-size: 20px;
+  }
+
+  .pollutant-card p {
+    font-size: 10px;
+    margin-bottom: 8px;
+  }
+
+  .stats-row {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+
+  .stat-card {
+    padding: 12px 10px;
+  }
+
+  .stat-val {
+    font-size: 19px;
+  }
+
+  .leaflet-map-responsive {
+    height: 310px;
+  }
+
+  .station-cards-stack {
+    max-height: 300px;
+  }
+
+  .trends-metrics-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+
+  .trends-metric-card {
+    padding: 12px 10px;
+  }
+
+  .metric-card-value {
+    font-size: 24px;
+  }
+
+  .chart-panel {
+    padding: 14px 10px;
+  }
+
+  .chart-y-axis {
+    width: 34px;
+    font-size: 9px;
+  }
+
+  .cpcb-reference-line span {
+    font-size: 8px;
+    padding: 1px 4px;
+  }
+
+  .chart-legend-row {
+    gap: 6px;
+  }
+
+  .legend-chip {
+    padding: 2px 7px;
+    font-size: 9px;
+  }
+
+  .compare-card {
+    padding: 16px 12px;
+  }
+
+  .compare-main-metric .metric-number {
+    font-size: 34px;
+  }
+}
+
+/* ==========================================================================
+   BREAKPOINT 6: SMALL MOBILE (320px to 375px)
+   ========================================================================== */
+@media (max-width: 375px) {
+  html, body {
+    font-size: 14px;
+  }
+
+  .mobile-header-bar {
+    padding: 8px 10px;
+  }
+
+  .mobile-header-brand .brand-title {
+    font-size: 15px;
+  }
+
+  .mobile-active-city-badge {
+    padding: 3px 7px;
+    font-size: 9px;
+  }
+
+  .main-content {
+    padding: 12px 8px;
+    max-width: 100vw;
+  }
+
+  .topbar h1 {
+    font-size: 22px;
+  }
+
+  .welcome-banner {
+    padding: 14px 12px;
+  }
+
+  .welcome-banner h2 {
+    font-size: 20px;
+  }
+
+  .welcome-banner p:last-child {
+    font-size: 12px;
+  }
+
+  .aqi-card {
+    padding: 14px 10px;
+  }
+
+  .metric-primary-block,
+  .metric-snapshot-block {
+    padding: 14px 10px;
+  }
+
+  .metric-primary-header {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .aqi-value {
+    font-size: 34px;
+  }
+
+  .snapshot-value {
+    font-size: 24px;
+  }
+
+  .aqi-circle {
+    width: 68px;
+    height: 68px;
+    min-width: 68px;
+    min-height: 68px;
+    border-width: 4px;
+  }
+
+  .aqi-circle span {
+    font-size: 15px;
+  }
+
+  .aqi-circle small {
+    font-size: 8px;
+  }
+
+  .pollutant-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
+  }
+
+  .pollutant-card {
+    padding: 10px 8px;
+  }
+
+  .pollutant-card h3 {
+    font-size: 18px;
+  }
+
+  .stats-row {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .leaflet-map-responsive {
+    height: 270px;
+  }
+
+  .trends-metrics-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
+  }
+
+  .trends-metric-card {
+    padding: 10px 8px;
+  }
+
+  .metric-card-value {
+    font-size: 20px;
+  }
+
+  .metric-card-label {
+    font-size: 9px;
+  }
+
+  .chart-panel {
+    padding: 12px 6px;
+  }
+
+  .chart-y-axis {
+    width: 30px;
+    font-size: 8px;
+  }
+
+  .chart-plot-area {
+    min-height: 190px;
+  }
+
+  .chart-bars-track {
+    gap: 2px;
+  }
+
+  .chart-bar-slot {
+    min-width: 8px;
+  }
+
+  .health-val-num {
+    font-size: 34px;
+  }
+
+  .btn-swap-locations {
+    font-size: 12px;
+    padding: 10px 12px;
   }
 }

@@ -6,91 +6,71 @@ import {
   formatDateTime,
   getTimeAgo
 } from '../utils/pm25Standards';
+import {
+  SUPPORTED_STATIONS,
+  getStationById
+} from '../config/stations';
 
-export default function CompareView({ nowTimestamp }) {
-  const [delhiData, setDelhiData] = useState(null);
-  const [ambalaData, setAmbalaData] = useState(null);
-  const [delhiLoc, setDelhiLoc] = useState(null);
-  const [ambalaLoc, setAmbalaLoc] = useState(null);
-  const [delhiHistory, setDelhiHistory] = useState([]);
-  const [ambalaHistory, setAmbalaHistory] = useState([]);
+export default function CompareView({ nowTimestamp, activeStationId }) {
+  const [stationAId, setStationAId] = useState(() => activeStationId || 8118);
+  const [stationBId, setStationBId] = useState(() => {
+    return activeStationId === 6964 ? 8118 : 6964;
+  });
+
+  const [dataA, setDataA] = useState(null);
+  const [dataB, setDataB] = useState(null);
+  const [historyA, setHistoryA] = useState([]);
+  const [historyB, setHistoryB] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [refreshCount, setRefreshCount] = useState(0);
 
-  const fetchComparisonData = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const [delhiAqRes, ambalaAqRes, delhiLocRes, ambalaLocRes, delhiHistRes, ambalaHistRes] = await Promise.all([
-        fetch(`${API_BASE_URL}/api/air-quality/8118`),
-        fetch(`${API_BASE_URL}/api/air-quality/6964`),
-        fetch(`${API_BASE_URL}/api/location/8118`),
-        fetch(`${API_BASE_URL}/api/location/6964`),
-        fetch(`${API_BASE_URL}/api/history/23534`),
-        fetch(`${API_BASE_URL}/api/history/14258997`)
-      ]);
-
-      if (!delhiAqRes.ok || !ambalaAqRes.ok) {
-        throw new Error('Failed to retrieve comparative air quality data from OpenAQ proxy.');
-      }
-
-      const [delhiAq, ambalaAq, delhiL, ambalaL, delhiH, ambalaH] = await Promise.all([
-        delhiAqRes.json(),
-        ambalaAqRes.json(),
-        delhiLocRes.json(),
-        ambalaLocRes.json(),
-        delhiHistRes.ok ? delhiHistRes.json() : { measurements: [] },
-        ambalaHistRes.ok ? ambalaHistRes.json() : { measurements: [] }
-      ]);
-
-      setDelhiData(delhiAq);
-      setAmbalaData(ambalaAq);
-      setDelhiLoc(delhiL);
-      setAmbalaLoc(ambalaL);
-      setDelhiHistory(delhiH.measurements || []);
-      setAmbalaHistory(ambalaH.measurements || []);
-    } catch (err) {
-      setError(err.message || 'Error loading comparison data.');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const stationA = getStationById(stationAId);
+  const stationB = getStationById(stationBId);
 
   useEffect(() => {
     let isMounted = true;
 
-    async function loadInitial() {
-      try {
-        const [delhiAqRes, ambalaAqRes, delhiLocRes, ambalaLocRes, delhiHistRes, ambalaHistRes] = await Promise.all([
-          fetch(`${API_BASE_URL}/api/air-quality/8118`),
-          fetch(`${API_BASE_URL}/api/air-quality/6964`),
-          fetch(`${API_BASE_URL}/api/location/8118`),
-          fetch(`${API_BASE_URL}/api/location/6964`),
-          fetch(`${API_BASE_URL}/api/history/23534`),
-          fetch(`${API_BASE_URL}/api/history/14258997`)
-        ]);
+    async function loadComparison() {
+      setLoading(true);
+      setError('');
 
-        if (!delhiAqRes.ok || !ambalaAqRes.ok) {
+      try {
+        const fetchList = [
+          fetch(`${API_BASE_URL}/api/air-quality/${stationAId}`),
+          fetch(`${API_BASE_URL}/api/air-quality/${stationBId}`)
+        ];
+
+        if (stationA?.pm25SensorId) {
+          fetchList.push(fetch(`${API_BASE_URL}/api/history/${stationA.pm25SensorId}`));
+        } else {
+          fetchList.push(Promise.resolve(null));
+        }
+
+        if (stationB?.pm25SensorId) {
+          fetchList.push(fetch(`${API_BASE_URL}/api/history/${stationB.pm25SensorId}`));
+        } else {
+          fetchList.push(Promise.resolve(null));
+        }
+
+        const [resAqA, resAqB, resHistA, resHistB] = await Promise.all(fetchList);
+
+        if (!resAqA.ok && !resAqB.ok) {
           throw new Error('Failed to retrieve comparative air quality data from OpenAQ proxy.');
         }
 
-        const [delhiAq, ambalaAq, delhiL, ambalaL, delhiH, ambalaH] = await Promise.all([
-          delhiAqRes.json(),
-          ambalaAqRes.json(),
-          delhiLocRes.json(),
-          ambalaLocRes.json(),
-          delhiHistRes.ok ? delhiHistRes.json() : { measurements: [] },
-          ambalaHistRes.ok ? ambalaHistRes.json() : { measurements: [] }
+        const [aqA, aqB, histA, histB] = await Promise.all([
+          resAqA.ok ? resAqA.json() : null,
+          resAqB.ok ? resAqB.json() : null,
+          resHistA && resHistA.ok ? resHistA.json() : { measurements: [] },
+          resHistB && resHistB.ok ? resHistB.json() : { measurements: [] }
         ]);
 
         if (!isMounted) return;
-        setDelhiData(delhiAq);
-        setAmbalaData(ambalaAq);
-        setDelhiLoc(delhiL);
-        setAmbalaLoc(ambalaL);
-        setDelhiHistory(delhiH.measurements || []);
-        setAmbalaHistory(ambalaH.measurements || []);
-        setError('');
+        setDataA(aqA);
+        setDataB(aqB);
+        setHistoryA(histA?.measurements || []);
+        setHistoryB(histB?.measurements || []);
       } catch (err) {
         if (isMounted) setError(err.message || 'Error loading comparison data.');
       } finally {
@@ -98,23 +78,30 @@ export default function CompareView({ nowTimestamp }) {
       }
     }
 
-    loadInitial();
+    loadComparison();
     return () => { isMounted = false; };
-  }, []);
+  }, [stationAId, stationBId, stationA?.pm25SensorId, stationB?.pm25SensorId, refreshCount]);
 
-  const delhiPm25 = delhiData?.readings?.find(r => r.pollutant === 'pm25');
-  const ambalaPm25 = ambalaData?.readings?.find(r => r.pollutant === 'pm25');
+  const handleSwap = () => {
+    const tempA = stationAId;
+    const tempB = stationBId;
+    setStationAId(tempB);
+    setStationBId(tempA);
+  };
+
+  const pm25A = dataA?.readings?.find(r => r.pollutant === 'pm25');
+  const pm25B = dataB?.readings?.find(r => r.pollutant === 'pm25');
 
   // Compute authentic rolling 24-hour statistics for both stations
-  const delhiStats24h = calculate24HourStats(delhiHistory, nowTimestamp);
-  const ambalaStats24h = calculate24HourStats(ambalaHistory, nowTimestamp);
+  const stats24hA = calculate24HourStats(historyA, nowTimestamp);
+  const stats24hB = calculate24HourStats(historyB, nowTimestamp);
 
   // Compute non-regulatory hourly snapshot advisories
-  const delhiSnapshot = getSnapshotAdvisory(delhiPm25?.value);
-  const ambalaSnapshot = getSnapshotAdvisory(ambalaPm25?.value);
+  const snapshotA = getSnapshotAdvisory(pm25A?.value);
+  const snapshotB = getSnapshotAdvisory(pm25B?.value);
 
-  const delhiTime = delhiPm25?.datetime?.local || delhiPm25?.datetime?.utc;
-  const ambalaTime = ambalaPm25?.datetime?.local || ambalaPm25?.datetime?.utc;
+  const timeA = pm25A?.datetime?.local || pm25A?.datetime?.utc;
+  const timeB = pm25B?.datetime?.local || pm25B?.datetime?.utc;
 
   // Pollutants to compare in table
   const pollutantKeys = [
@@ -127,24 +114,75 @@ export default function CompareView({ nowTimestamp }) {
   ];
 
   // Compare 24-hour averages if both available; otherwise snapshots
-  const diff24h = (delhiStats24h.average !== null && ambalaStats24h.average !== null)
-    ? (Number(delhiStats24h.average) - Number(ambalaStats24h.average)).toFixed(1)
+  const diff24h = (stats24hA.average !== null && stats24hB.average !== null)
+    ? (Number(stats24hA.average) - Number(stats24hB.average)).toFixed(1)
     : null;
 
-  const diffSnapshot = (delhiPm25?.value && ambalaPm25?.value)
-    ? (Number(delhiPm25.value) - Number(ambalaPm25.value)).toFixed(1)
+  const diffSnapshot = (pm25A?.value != null && pm25B?.value != null)
+    ? (Number(pm25A.value) - Number(pm25B.value)).toFixed(1)
     : null;
 
   return (
     <div className="compare-view">
       <div className="section-heading">
         <div>
-          <h2>Station Comparison: New Delhi vs Ambala</h2>
-          <p>Comparing Capital NCR monitoring against the nearest genuine station within 25 km of Ambala (Patti Mehar)</p>
+          <h2>Multi-City Air Quality Comparison</h2>
+          <p>
+            Side-by-side comparative analysis of verified OpenAQ monitoring stations
+          </p>
         </div>
-        <button className="btn-refresh" onClick={fetchComparisonData} disabled={loading}>
+        <button
+          type="button"
+          className="btn-refresh"
+          onClick={() => setRefreshCount(c => c + 1)}
+          disabled={loading}
+        >
           {loading ? 'Refreshing...' : '↻ Refresh Data'}
         </button>
+      </div>
+
+      {/* Station Selector Control Bar */}
+      <div className="compare-selectors-bar">
+        <div className="compare-select-block">
+          <label htmlFor="stationASelect" className="selector-label">LOCATION A:</label>
+          <select
+            id="stationASelect"
+            className="station-dropdown"
+            value={stationAId}
+            onChange={(e) => setStationAId(Number(e.target.value))}
+          >
+            {SUPPORTED_STATIONS.map(s => (
+              <option key={s.id} value={s.id} disabled={s.id === stationBId}>
+                {s.cityName} · {s.shortName || s.name} (ID: {s.id})
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <button
+          type="button"
+          className="btn-swap-locations"
+          onClick={handleSwap}
+          title="Swap Locations"
+        >
+          ⇄ Swap
+        </button>
+
+        <div className="compare-select-block">
+          <label htmlFor="stationBSelect" className="selector-label">LOCATION B:</label>
+          <select
+            id="stationBSelect"
+            className="station-dropdown"
+            value={stationBId}
+            onChange={(e) => setStationBId(Number(e.target.value))}
+          >
+            {SUPPORTED_STATIONS.map(s => (
+              <option key={s.id} value={s.id} disabled={s.id === stationAId}>
+                {s.cityName} · {s.shortName || s.name} (ID: {s.id})
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {loading ? (
@@ -158,7 +196,9 @@ export default function CompareView({ nowTimestamp }) {
           <div>
             <h3>Comparison Unavailable</h3>
             <p>{error}</p>
-            <button className="btn-retry" onClick={fetchComparisonData}>Retry Request</button>
+            <button className="btn-retry" onClick={() => setRefreshCount(c => c + 1)}>
+              Retry Request
+            </button>
           </div>
         </div>
       ) : (
@@ -170,9 +210,9 @@ export default function CompareView({ nowTimestamp }) {
               <>
                 <h3>
                   {Number(diff24h) > 0 ? (
-                    <>Ambala rolling 24-hour PM2.5 average is <strong>{Math.abs(diff24h)} µg/m³ lower</strong> than New Delhi</>
+                    <>{stationB.cityName} rolling 24-hour PM2.5 average is <strong>{Math.abs(diff24h)} µg/m³ lower</strong> than {stationA.cityName}</>
                   ) : Number(diff24h) < 0 ? (
-                    <>New Delhi rolling 24-hour PM2.5 average is <strong>{Math.abs(diff24h)} µg/m³ lower</strong> than Ambala</>
+                    <>{stationA.cityName} rolling 24-hour PM2.5 average is <strong>{Math.abs(diff24h)} µg/m³ lower</strong> than {stationB.cityName}</>
                   ) : (
                     <>Both stations report identical rolling 24-hour PM2.5 averages</>
                   )}
@@ -180,7 +220,7 @@ export default function CompareView({ nowTimestamp }) {
                 <p className="callout-note">
                   Based on rolling 24-hour averages calculated from ground sensor observations.
                   {diffSnapshot !== null && (
-                    <span> Latest single hourly reading difference: {Math.abs(diffSnapshot)} µg/m³ ({Number(diffSnapshot) > 0 ? 'Ambala lower' : 'New Delhi lower'}).</span>
+                    <span> Latest single hourly reading difference: {Math.abs(diffSnapshot)} µg/m³ ({Number(diffSnapshot) > 0 ? `${stationB.cityName} lower` : `${stationA.cityName} lower`}).</span>
                   )}
                 </p>
               </>
@@ -188,9 +228,9 @@ export default function CompareView({ nowTimestamp }) {
               <>
                 <h3>
                   {Number(diffSnapshot) > 0 ? (
-                    <>Ambala latest hourly PM2.5 snapshot is <strong>{Math.abs(diffSnapshot)} µg/m³ lower</strong> than New Delhi</>
+                    <>{stationB.cityName} latest hourly PM2.5 snapshot is <strong>{Math.abs(diffSnapshot)} µg/m³ lower</strong> than {stationA.cityName}</>
                   ) : Number(diffSnapshot) < 0 ? (
-                    <>New Delhi latest hourly PM2.5 snapshot is <strong>{Math.abs(diffSnapshot)} µg/m³ lower</strong> than Ambala</>
+                    <>{stationA.cityName} latest hourly PM2.5 snapshot is <strong>{Math.abs(diffSnapshot)} µg/m³ lower</strong> than {stationB.cityName}</>
                   ) : (
                     <>Both stations report identical instantaneous PM2.5 readings</>
                   )}
@@ -206,13 +246,15 @@ export default function CompareView({ nowTimestamp }) {
 
           {/* Cards Grid */}
           <div className="compare-grid">
-            {/* New Delhi Card */}
+            {/* Station A Card */}
             <div className="compare-card">
               <div className="compare-header">
                 <div>
-                  <span className="station-type-tag">NATIONAL CAPITAL (NCR)</span>
-                  <h3>{delhiLoc?.name || 'New Delhi'}</h3>
-                  <p className="station-meta">Location ID: 8118 · Provider: AirNow · Network: U.S. Diplomatic Post</p>
+                  <span className="station-type-tag" style={{ borderLeft: `3px solid ${stationA.pinColor || '#1b5e20'}` }}>
+                    {stationA.cityName.toUpperCase()}
+                  </span>
+                  <h3>{stationA.name}</h3>
+                  <p className="station-meta">Location ID: {stationA.id} · Provider: {stationA.provider} · Network: {stationA.network}</p>
                 </div>
                 <span className="status-pill active">LIVE MONITOR</span>
               </div>
@@ -223,36 +265,36 @@ export default function CompareView({ nowTimestamp }) {
                 <div
                   className="metric-number"
                   style={{
-                    color: (delhiStats24h.hasData && delhiStats24h.coverageQuality !== 'insufficient')
-                      ? delhiStats24h.category.color
+                    color: (stats24hA.hasData && stats24hA.coverageQuality !== 'insufficient')
+                      ? stats24hA.category.color
                       : '#666'
                   }}
                 >
-                  {delhiStats24h.hasData && delhiStats24h.average !== null ? delhiStats24h.average : '—'}
+                  {stats24hA.hasData && stats24hA.average !== null ? stats24hA.average : '—'}
                   <span className="metric-unit">µg/m³</span>
                 </div>
 
                 <div
                   className="category-pill"
                   style={{
-                    backgroundColor: (delhiStats24h.hasData && delhiStats24h.coverageQuality !== 'insufficient')
-                      ? delhiStats24h.category.bgColor
+                    backgroundColor: (stats24hA.hasData && stats24hA.coverageQuality !== 'insufficient')
+                      ? stats24hA.category.bgColor
                       : '#f5f5f5',
-                    color: (delhiStats24h.hasData && delhiStats24h.coverageQuality !== 'insufficient')
-                      ? delhiStats24h.category.color
+                    color: (stats24hA.hasData && stats24hA.coverageQuality !== 'insufficient')
+                      ? stats24hA.category.color
                       : '#666',
-                    borderColor: (delhiStats24h.hasData && delhiStats24h.coverageQuality !== 'insufficient')
-                      ? delhiStats24h.category.borderColor
+                    borderColor: (stats24hA.hasData && stats24hA.coverageQuality !== 'insufficient')
+                      ? stats24hA.category.borderColor
                       : '#ddd'
                   }}
                 >
-                  {delhiStats24h.hasData && delhiStats24h.coverageQuality !== 'insufficient'
-                    ? `${delhiStats24h.category.label} — ${delhiStats24h.statusLabel}`
-                    : delhiStats24h.statusLabel}
+                  {stats24hA.hasData && stats24hA.coverageQuality !== 'insufficient'
+                    ? `${stats24hA.category.label} — ${stats24hA.statusLabel}`
+                    : stats24hA.statusLabel}
                 </div>
 
                 <p className="coverage-detail-text" style={{ fontSize: '11px', color: '#6d8274', marginTop: '8px' }}>
-                  ℹ {delhiStats24h.statusDescription}
+                  ℹ {stats24hA.statusDescription}
                 </p>
               </div>
 
@@ -261,52 +303,54 @@ export default function CompareView({ nowTimestamp }) {
                 <span className="metric-label" style={{ textAlign: 'left', marginBottom: '4px' }}>LATEST HOURLY READING (SNAPSHOT)</span>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
                   <div style={{ fontSize: '20px', fontWeight: 800, color: '#1e3a2b' }}>
-                    {delhiPm25 ? `${delhiPm25.value}` : '—'} <span style={{ fontSize: '12px', fontWeight: 600, color: '#7a8e80' }}>µg/m³</span>
+                    {pm25A ? `${pm25A.value}` : '—'} <span style={{ fontSize: '12px', fontWeight: 600, color: '#7a8e80' }}>µg/m³</span>
                   </div>
                   <div
                     className="category-pill"
                     style={{
-                      backgroundColor: delhiSnapshot.bgColor,
-                      color: delhiSnapshot.color,
-                      borderColor: delhiSnapshot.borderColor,
+                      backgroundColor: snapshotA.bgColor,
+                      color: snapshotA.color,
+                      borderColor: snapshotA.borderColor,
                       fontSize: '10px',
                       padding: '2px 8px'
                     }}
                   >
-                    {delhiSnapshot.label}
+                    {snapshotA.label}
                   </div>
                 </div>
                 <div className="timestamp-row">
                   <span className="timestamp-label">Observed at:</span>
                   <span className="timestamp-value">
-                    {formatDateTime(delhiTime)}
-                    {delhiTime && (
-                      <span className="time-ago-tag">({getTimeAgo(delhiTime, nowTimestamp)})</span>
+                    {formatDateTime(timeA)}
+                    {timeA && (
+                      <span className="time-ago-tag">({getTimeAgo(timeA, nowTimestamp)})</span>
                     )}
                   </span>
                 </div>
                 <div className="timestamp-row">
                   <span className="timestamp-label">Fetched from OpenAQ:</span>
-                  <span className="timestamp-value">{formatDateTime(delhiData?.fetchedAt)}</span>
+                  <span className="timestamp-value">{formatDateTime(dataA?.fetchedAt)}</span>
                 </div>
                 <small style={{ fontSize: '10px', color: '#7a8e80', fontStyle: 'italic', marginTop: '4px', display: 'block' }}>
-                  * {delhiSnapshot.disclaimer}
+                  * {snapshotA.disclaimer}
                 </small>
               </div>
 
               <div className="station-coords-box">
-                <span>📍 Coordinates: {delhiLoc?.latitude?.toFixed(4)}°N, {delhiLoc?.longitude?.toFixed(4)}°E</span>
-                <span>Country: {delhiLoc?.country || 'India'}</span>
+                <span>📍 Coordinates: {stationA.latitude.toFixed(4)}°N, {stationA.longitude.toFixed(4)}°E</span>
+                <span>Locality: {stationA.locality}</span>
               </div>
             </div>
 
-            {/* Ambala Card */}
+            {/* Station B Card */}
             <div className="compare-card">
               <div className="compare-header">
                 <div>
-                  <span className="station-type-tag">HARYANA PLAINS</span>
-                  <h3>{ambalaLoc?.name || 'Patti Mehar, Ambala - HSPCB'}</h3>
-                  <p className="station-meta">Location ID: 6964 · Provider: CPCB · Agency: Haryana State Pollution Control Board</p>
+                  <span className="station-type-tag" style={{ borderLeft: `3px solid ${stationB.pinColor || '#00695c'}` }}>
+                    {stationB.cityName.toUpperCase()}
+                  </span>
+                  <h3>{stationB.name}</h3>
+                  <p className="station-meta">Location ID: {stationB.id} · Provider: {stationB.provider} · Network: {stationB.network}</p>
                 </div>
                 <span className="status-pill active">LIVE MONITOR</span>
               </div>
@@ -317,36 +361,36 @@ export default function CompareView({ nowTimestamp }) {
                 <div
                   className="metric-number"
                   style={{
-                    color: (ambalaStats24h.hasData && ambalaStats24h.coverageQuality !== 'insufficient')
-                      ? ambalaStats24h.category.color
+                    color: (stats24hB.hasData && stats24hB.coverageQuality !== 'insufficient')
+                      ? stats24hB.category.color
                       : '#666'
                   }}
                 >
-                  {ambalaStats24h.hasData && ambalaStats24h.average !== null ? ambalaStats24h.average : '—'}
+                  {stats24hB.hasData && stats24hB.average !== null ? stats24hB.average : '—'}
                   <span className="metric-unit">µg/m³</span>
                 </div>
 
                 <div
                   className="category-pill"
                   style={{
-                    backgroundColor: (ambalaStats24h.hasData && ambalaStats24h.coverageQuality !== 'insufficient')
-                      ? ambalaStats24h.category.bgColor
+                    backgroundColor: (stats24hB.hasData && stats24hB.coverageQuality !== 'insufficient')
+                      ? stats24hB.category.bgColor
                       : '#f5f5f5',
-                    color: (ambalaStats24h.hasData && ambalaStats24h.coverageQuality !== 'insufficient')
-                      ? ambalaStats24h.category.color
+                    color: (stats24hB.hasData && stats24hB.coverageQuality !== 'insufficient')
+                      ? stats24hB.category.color
                       : '#666',
-                    borderColor: (ambalaStats24h.hasData && ambalaStats24h.coverageQuality !== 'insufficient')
-                      ? ambalaStats24h.category.borderColor
+                    borderColor: (stats24hB.hasData && stats24hB.coverageQuality !== 'insufficient')
+                      ? stats24hB.category.borderColor
                       : '#ddd'
                   }}
                 >
-                  {ambalaStats24h.hasData && ambalaStats24h.coverageQuality !== 'insufficient'
-                    ? `${ambalaStats24h.category.label} — ${ambalaStats24h.statusLabel}`
-                    : ambalaStats24h.statusLabel}
+                  {stats24hB.hasData && stats24hB.coverageQuality !== 'insufficient'
+                    ? `${stats24hB.category.label} — ${stats24hB.statusLabel}`
+                    : stats24hB.statusLabel}
                 </div>
 
                 <p className="coverage-detail-text" style={{ fontSize: '11px', color: '#6d8274', marginTop: '8px' }}>
-                  ℹ {ambalaStats24h.statusDescription}
+                  ℹ {stats24hB.statusDescription}
                 </p>
               </div>
 
@@ -355,42 +399,42 @@ export default function CompareView({ nowTimestamp }) {
                 <span className="metric-label" style={{ textAlign: 'left', marginBottom: '4px' }}>LATEST HOURLY READING (SNAPSHOT)</span>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
                   <div style={{ fontSize: '20px', fontWeight: 800, color: '#1e3a2b' }}>
-                    {ambalaPm25 ? `${ambalaPm25.value}` : '—'} <span style={{ fontSize: '12px', fontWeight: 600, color: '#7a8e80' }}>µg/m³</span>
+                    {pm25B ? `${pm25B.value}` : '—'} <span style={{ fontSize: '12px', fontWeight: 600, color: '#7a8e80' }}>µg/m³</span>
                   </div>
                   <div
                     className="category-pill"
                     style={{
-                      backgroundColor: ambalaSnapshot.bgColor,
-                      color: ambalaSnapshot.color,
-                      borderColor: ambalaSnapshot.borderColor,
+                      backgroundColor: snapshotB.bgColor,
+                      color: snapshotB.color,
+                      borderColor: snapshotB.borderColor,
                       fontSize: '10px',
                       padding: '2px 8px'
                     }}
                   >
-                    {ambalaSnapshot.label}
+                    {snapshotB.label}
                   </div>
                 </div>
                 <div className="timestamp-row">
                   <span className="timestamp-label">Observed at:</span>
                   <span className="timestamp-value">
-                    {formatDateTime(ambalaTime)}
-                    {ambalaTime && (
-                      <span className="time-ago-tag">({getTimeAgo(ambalaTime, nowTimestamp)})</span>
+                    {formatDateTime(timeB)}
+                    {timeB && (
+                      <span className="time-ago-tag">({getTimeAgo(timeB, nowTimestamp)})</span>
                     )}
                   </span>
                 </div>
                 <div className="timestamp-row">
                   <span className="timestamp-label">Fetched from OpenAQ:</span>
-                  <span className="timestamp-value">{formatDateTime(ambalaData?.fetchedAt)}</span>
+                  <span className="timestamp-value">{formatDateTime(dataB?.fetchedAt)}</span>
                 </div>
                 <small style={{ fontSize: '10px', color: '#7a8e80', fontStyle: 'italic', marginTop: '4px', display: 'block' }}>
-                  * {ambalaSnapshot.disclaimer}
+                  * {snapshotB.disclaimer}
                 </small>
               </div>
 
               <div className="station-coords-box">
-                <span>📍 Coordinates: {ambalaLoc?.latitude?.toFixed(4)}°N, {ambalaLoc?.longitude?.toFixed(4)}°E</span>
-                <span>Distance: ~240m from Ambala reference center</span>
+                <span>📍 Coordinates: {stationB.latitude.toFixed(4)}°N, {stationB.longitude.toFixed(4)}°E</span>
+                <span>Locality: {stationB.locality}</span>
               </div>
             </div>
           </div>
@@ -409,15 +453,15 @@ export default function CompareView({ nowTimestamp }) {
                 <thead>
                   <tr>
                     <th>Pollutant</th>
-                    <th>New Delhi (8118)</th>
-                    <th>Ambala (6964)</th>
+                    <th>{stationA.cityName} ({stationA.shortName || stationA.id})</th>
+                    <th>{stationB.cityName} ({stationB.shortName || stationB.id})</th>
                     <th>Description</th>
                   </tr>
                 </thead>
                 <tbody>
                   {pollutantKeys.map(p => {
-                    const dRead = delhiData?.readings?.find(r => r.pollutant === p.key);
-                    const aRead = ambalaData?.readings?.find(r => r.pollutant === p.key);
+                    const readA = dataA?.readings?.find(r => r.pollutant === p.key);
+                    const readB = dataB?.readings?.find(r => r.pollutant === p.key);
 
                     return (
                       <tr key={p.key}>
@@ -426,15 +470,15 @@ export default function CompareView({ nowTimestamp }) {
                           <span className="cell-unit">{p.unit}</span>
                         </td>
                         <td className="data-cell">
-                          {dRead ? (
-                            <span className="reading-val">{dRead.value} <small>{dRead.unit}</small></span>
+                          {readA ? (
+                            <span className="reading-val">{readA.value} <small>{readA.unit}</small></span>
                           ) : (
                             <span className="reading-na">Sensor not reported</span>
                           )}
                         </td>
                         <td className="data-cell">
-                          {aRead ? (
-                            <span className="reading-val">{aRead.value} <small>{aRead.unit}</small></span>
+                          {readB ? (
+                            <span className="reading-val">{readB.value} <small>{readB.unit}</small></span>
                           ) : (
                             <span className="reading-na">Sensor not reported</span>
                           )}
