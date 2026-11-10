@@ -154,105 +154,130 @@ export default function LeaderboardView({
         </div>
       </div>
 
-      {/* 3. Leaderboard Table / Cards */}
-      <div className="panel leaderboard-panel">
-        <div className="leaderboard-table-header">
-          <span className="col-rank">RANK</span>
-          <span className="col-city">CITY & MONITORING SITE</span>
-          <span className="col-pm25">PM2.5 CONCENTRATION</span>
-          <span className="col-category">NAAQS CATEGORY</span>
-          <span className="col-time">OBSERVATION STATUS</span>
-          <span className="col-action">ACTION</span>
+      {/* 3. Leaderboard Table Panel */}
+      <div className="panel leaderboard-table-panel">
+        <div className="leaderboard-header-row">
+          <div>
+            <h3>Real-Time City Rankings</h3>
+            <p className="table-subtitle">
+              Ranked strictly by physical PM2.5 mass density (µg/m³). Stale observations (&gt;3h) excluded from current rankings.
+            </p>
+          </div>
+          <span className="leaderboard-count-badge">
+            {leaderboard.currentReportingCount} Active Live Rankings
+          </span>
         </div>
 
-        <div className="leaderboard-rows-wrap">
-          {leaderboard.cities.map((item) => (
-            <div
-              key={item.cityName}
-              className={`leaderboard-row ${item.rankingStatus === 'current' ? '' : item.rankingStatus === 'stale' ? 'row-stale' : 'row-unavailable'}`}
-              onClick={() => handleCityClick(item.stationId)}
-            >
-              <div className="col-rank">
-                {item.rank !== null ? (
-                  <span className={`rank-badge ${item.rank <= 3 ? `rank-${item.rank}` : ''}`}>
-                    #{item.rank}
-                  </span>
-                ) : item.isStale ? (
-                  <span className="rank-stale-tag" title="Observation >3h old — excluded from current rankings">
-                    Stale
-                  </span>
-                ) : (
-                  <span className="rank-na">—</span>
-                )}
-              </div>
-
-              <div className="col-city">
-                <div className="city-name-group">
-                  <span className="city-dot" style={{ backgroundColor: item.pinColor }} />
-                  <div>
-                    <strong>{item.cityName}</strong>
-                    <small>{item.stationName} ({item.provider})</small>
-                  </div>
-                </div>
-              </div>
-
-              <div className="col-pm25">
-                {item.hasData ? (
-                  <div className="pm25-val-box">
-                    <span className="val-text">{item.pm25}</span>
-                    <span className="unit-text">µg/m³</span>
-                  </div>
-                ) : (
-                  <span className="text-muted">Sensor Offline</span>
-                )}
-              </div>
-
-              <div className="col-category">
-                {item.hasData ? (
-                  <span
-                    className="category-pill"
-                    style={{
-                      backgroundColor: item.category.bgColor,
-                      color: item.category.color,
-                      borderColor: item.category.borderColor
-                    }}
-                  >
-                    {item.category.label}
-                  </span>
-                ) : (
-                  <span className="category-pill-na">Unavailable</span>
-                )}
-              </div>
-
-              <div className="col-time">
-                {item.hasData ? (
-                  <div>
-                    <span>{item.measurementTime}</span>
-                    {item.isStale ? (
-                      <span className="stale-reading-label">Stale · not current (&gt;3h)</span>
-                    ) : (
-                      <span className="live-reading-label">Live observation</span>
-                    )}
-                  </div>
-                ) : (
-                  <span className="text-muted">No recent broadcast</span>
-                )}
-              </div>
-
-              <div className="col-action">
-                <button
-                  type="button"
-                  className="btn-inspect-station"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleCityClick(item.stationId);
-                  }}
+        <div className="table-responsive leaderboard-table-wrap">
+          <table className="leaderboard-table">
+            <thead>
+              <tr>
+                <th className="col-rank">Rank</th>
+                <th className="col-city">City</th>
+                <th className="col-site">Monitoring Site</th>
+                <th className="col-pm25">PM2.5 Concentration</th>
+                <th className="col-category">NAAQS Category</th>
+                <th className="col-time">Observation Time</th>
+                <th className="col-action">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {leaderboard.cities.map((item) => (
+                <tr
+                  key={item.cityName}
+                  className={`leaderboard-row ${item.rankingStatus === 'current' ? 'row-current' : item.rankingStatus === 'stale' ? 'row-stale' : 'row-unavailable'}`}
+                  onClick={() => handleCityClick(item.stationId)}
                 >
-                  Inspect →
-                </button>
-              </div>
-            </div>
-          ))}
+                  <td className="rank-cell">
+                    {item.rank !== null ? (
+                      <span className={`rank-badge ${item.rank <= 3 ? `rank-${item.rank}` : ''}`}>
+                        #{item.rank}
+                      </span>
+                    ) : item.isStale ? (
+                      <span className="rank-stale-tag" title="Observation >3h old — excluded from current rankings">
+                        Stale
+                      </span>
+                    ) : (
+                      <span className="rank-na" title="No sensor reading broadcast">—</span>
+                    )}
+                  </td>
+
+                  <td className="city-cell">
+                    <div className="leaderboard-city-cell-content">
+                      <span className="city-dot" style={{ backgroundColor: item.pinColor }} />
+                      <strong className="leaderboard-city-name">{item.cityName}</strong>
+                    </div>
+                  </td>
+
+                  <td className="site-cell">
+                    <div className="leaderboard-station-meta">
+                      <span className="station-name-text">{item.stationName}</span>
+                      <small className="station-provider-tag">({item.provider})</small>
+                    </div>
+                  </td>
+
+                  <td className="pm25-cell">
+                    {item.hasData ? (
+                      <div className="pm25-val-box">
+                        <span className="pm25-val-bold">{item.pm25}</span>
+                        <span className="unit-text">µg/m³</span>
+                      </div>
+                    ) : (
+                      <span className="text-muted-offline">Sensor Offline</span>
+                    )}
+                  </td>
+
+                  <td className="category-cell">
+                    {item.hasData ? (
+                      <span
+                        className="category-pill"
+                        style={{
+                          backgroundColor: item.category.bgColor,
+                          color: item.category.color,
+                          borderColor: item.category.borderColor
+                        }}
+                      >
+                        {item.category.label}
+                      </span>
+                    ) : (
+                      <span className="category-pill-na">Unavailable</span>
+                    )}
+                  </td>
+
+                  <td className="time-cell">
+                    {item.hasData ? (
+                      <div className="time-cell-content">
+                        <span className="time-text">{item.measurementTime}</span>
+                        {item.isStale ? (
+                          <span className="status-pill stale">Stale (&gt;3h)</span>
+                        ) : (
+                          <span className="status-pill live">Live</span>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="time-cell-content">
+                        <span className="status-pill unavailable">Offline</span>
+                      </div>
+                    )}
+                  </td>
+
+                  <td className="action-cell">
+                    <button
+                      type="button"
+                      className="btn-inspect-station"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleCityClick(item.stationId);
+                      }}
+                      title={`Inspect ${item.cityName}`}
+                    >
+                      Inspect →
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
 
