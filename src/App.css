@@ -641,7 +641,8 @@ footer {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
+  max-width: 100%;
 }
 
 .city-selector-box,
@@ -649,12 +650,16 @@ footer {
 .station-selector-header {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   background: white;
   border: 1px solid #d8e2d4;
-  border-radius: 12px;
-  padding: 8px 16px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  border-radius: 10px;
+  padding: 6px 12px;
+  min-height: 42px;
+  box-sizing: border-box;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
+  min-width: 0;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .city-selector-box:focus-within,
@@ -665,8 +670,13 @@ footer {
 }
 
 .location-pin-icon {
-  font-size: 18px;
+  font-size: 15px;
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  line-height: 1;
 }
 
 .city-select-field,
@@ -676,14 +686,17 @@ footer {
   flex-direction: column;
   min-width: 0;
   flex: 1;
+  justify-content: center;
 }
 
 .selector-label {
-  font-size: 9px;
+  font-size: 8.5px;
   font-weight: 800;
-  letter-spacing: 1px;
+  letter-spacing: 0.8px;
   color: #7b8e80;
   text-transform: uppercase;
+  line-height: 1;
+  margin-bottom: 2px;
 }
 
 .city-dropdown,
@@ -696,22 +709,27 @@ footer {
   color: #1b4937;
   cursor: pointer;
   outline: none;
-  padding: 2px 0;
+  padding: 0;
+  width: 100%;
   max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   text-overflow: ellipsis;
   overflow: hidden;
   white-space: nowrap;
+  line-height: 1.25;
 }
 
 .single-station-label {
   font-size: 13px;
   font-weight: 700;
   color: #1b4937;
-  padding: 2px 0;
+  padding: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 100%;
+  line-height: 1.25;
 }
 
 .city-active-indicator {
@@ -721,9 +739,11 @@ footer {
   background: #f0f7f2;
   border: 1px solid #cfe2d5;
   border-radius: 20px;
-  padding: 6px 14px;
+  padding: 6px 12px;
   font-size: 12px;
   color: #1b4937;
+  height: 42px;
+  box-sizing: border-box;
 }
 
 .city-dot {
@@ -735,30 +755,36 @@ footer {
 
 .city-indicator-text {
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Compare View Station Selectors Bar */
 .compare-selectors-bar {
   display: flex;
   align-items: center;
-  gap: 16px;
-  margin-bottom: 22px;
+  gap: 12px;
+  margin-bottom: 20px;
   flex-wrap: wrap;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .compare-select-block {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
   background: white;
   border: 1px solid #d8e2d4;
-  border-radius: 12px;
-  padding: 10px 14px;
+  border-radius: 10px;
+  padding: 6px 12px;
   flex: 1;
   min-width: 0;
   max-width: 100%;
   box-sizing: border-box;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+  min-height: 42px;
+  justify-content: center;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
 }
 
 .compare-select-block:focus-within {
@@ -770,17 +796,19 @@ footer {
   border: none;
   background: transparent;
   font-family: inherit;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
   color: #1b4937;
   outline: none;
   cursor: pointer;
   width: 100%;
   max-width: 100%;
+  min-width: 0;
   box-sizing: border-box;
   text-overflow: ellipsis;
   overflow: hidden;
   white-space: nowrap;
+  line-height: 1.25;
 }
 
 .btn-swap-locations {
@@ -788,15 +816,17 @@ footer {
   border: 1px solid #c7dcc3;
   color: #1b4937;
   font-family: inherit;
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 700;
   border-radius: 10px;
-  padding: 12px 18px;
+  padding: 0 14px;
+  height: 42px;
   cursor: pointer;
   transition: all 0.2s ease;
   flex-shrink: 0;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
 }
 
@@ -3787,21 +3817,25 @@ body.nav-drawer-open {
   .topbar {
     flex-direction: column;
     align-items: flex-start;
-    gap: 16px;
-    margin-bottom: 22px;
+    gap: 14px;
+    margin-bottom: 20px;
   }
 
   .global-city-selector-wrap {
     width: 100%;
     display: flex;
     flex-wrap: wrap;
-    gap: 10px;
+    gap: 8px;
+    align-items: center;
   }
 
   .city-selector-box,
   .station-selector-box {
-    flex: 1 1 240px;
-    min-width: 200px;
+    flex: 1 1 200px;
+    min-width: 160px;
+    max-width: 100%;
+    padding: 6px 12px;
+    min-height: 42px;
   }
 
   .dual-metric-row {
@@ -3982,18 +4016,90 @@ body.nav-drawer-open {
     height: 340px;
   }
 
+  .global-city-selector-wrap {
+    width: 100%;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr) auto;
+    gap: 8px;
+    align-items: center;
+    box-sizing: border-box;
+  }
+
+  .city-selector-box,
+  .station-selector-box {
+    width: 100%;
+    box-sizing: border-box;
+    min-width: 0;
+    padding: 4px 10px;
+    min-height: 40px;
+    border-radius: 10px;
+  }
+
+  .city-active-indicator {
+    display: none !important;
+  }
+
+  .topbar-fav-btn {
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    min-height: 40px;
+    border-radius: 10px;
+    font-size: 18px;
+  }
+
   /* Compare View */
   .compare-selectors-bar {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 10px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    gap: 8px;
+    align-items: center;
+    width: 100%;
+    box-sizing: border-box;
+    margin-bottom: 16px;
+  }
+
+  .compare-select-block {
+    padding: 5px 10px;
+    min-height: 40px;
+    border-radius: 10px;
   }
 
   .btn-swap-locations {
+    width: 38px;
+    height: 38px;
+    min-height: 38px;
+    min-width: 38px;
+    padding: 0;
+    border-radius: 50%;
+    font-size: 15px;
     align-self: center;
-    width: 100%;
+    display: flex;
+    align-items: center;
     justify-content: center;
-    min-height: 44px;
+  }
+
+  .city-filter-bar {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    gap: 6px;
+    padding-bottom: 6px;
+    margin-bottom: 12px;
+  }
+
+  .city-filter-bar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .city-pill-btn {
+    flex-shrink: 0;
+    min-height: 32px;
+    padding: 4px 12px;
+    font-size: 11.5px;
+    white-space: nowrap;
   }
 
   /* Trends View */
@@ -4160,36 +4266,86 @@ body.nav-drawer-open {
   }
 
   .global-city-selector-wrap {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 8px;
+    width: 100%;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) auto;
+    gap: 6px;
+    align-items: center;
+    box-sizing: border-box;
   }
 
   .city-selector-box,
   .station-selector-box {
     width: 100%;
     box-sizing: border-box;
-    padding: 8px 12px;
+    min-width: 0;
+    padding: 4px 8px;
+    min-height: 38px;
+    gap: 6px;
+    border-radius: 9px;
+  }
+
+  .location-pin-icon {
+    font-size: 13px;
+    width: 15px;
+  }
+
+  .selector-label {
+    font-size: 8px;
+    letter-spacing: 0.5px;
+    margin-bottom: 1px;
   }
 
   .city-dropdown,
-  .station-dropdown,
-  .compare-select-block select {
-    font-size: 16px; /* Prevents auto-zoom in mobile webkit */
+  .station-dropdown {
+    font-size: 13px;
+  }
+
+  .single-station-label {
+    font-size: 12.5px;
   }
 
   .city-active-indicator {
-    align-self: flex-start;
-    max-width: 100%;
-    box-sizing: border-box;
-    font-size: 11px;
-    padding: 5px 10px;
+    display: none !important;
   }
 
-  .city-indicator-text {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  .topbar-fav-btn {
+    width: 38px;
+    height: 38px;
+    min-width: 38px;
+    min-height: 38px;
+    border-radius: 9px;
+    font-size: 17px;
+  }
+
+  .compare-selectors-bar {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 5px;
+    margin-bottom: 14px;
+  }
+
+  .compare-select-block {
+    padding: 5px 10px;
+    min-height: 38px;
+    border-radius: 9px;
+  }
+
+  .compare-select-block select {
+    font-size: 13px;
+  }
+
+  .btn-swap-locations {
+    width: auto;
+    min-width: unset;
+    min-height: 28px;
+    height: 28px;
+    padding: 0 14px;
+    border-radius: 14px;
+    font-size: 11.5px;
+    margin: 2px auto;
+    align-self: center;
   }
 
   .metric-primary-block,
@@ -4486,9 +4642,82 @@ body.nav-drawer-open {
     font-size: 34px;
   }
 
-  .btn-swap-locations {
+  .global-city-selector-wrap {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr) auto;
+    gap: 5px;
+  }
+
+  .city-selector-box,
+  .station-selector-box {
+    padding: 3px 6px;
+    min-height: 36px;
+    gap: 4px;
+    border-radius: 8px;
+  }
+
+  .location-pin-icon {
     font-size: 12px;
-    padding: 10px 12px;
+    width: 14px;
+  }
+
+  .selector-label {
+    font-size: 7.5px;
+  }
+
+  .city-dropdown,
+  .station-dropdown {
+    font-size: 12.5px;
+  }
+
+  .single-station-label {
+    font-size: 12px;
+  }
+
+  .topbar-fav-btn {
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    min-height: 36px;
+    border-radius: 8px;
+    font-size: 16px;
+  }
+
+  .compare-selectors-bar {
+    gap: 4px;
+  }
+
+  .compare-select-block {
+    padding: 4px 8px;
+    min-height: 36px;
+    border-radius: 8px;
+  }
+
+  .compare-select-block select {
+    font-size: 12.5px;
+  }
+
+  .btn-swap-locations {
+    font-size: 11px;
+    height: 26px;
+    min-height: 26px;
+    padding: 0 12px;
+    border-radius: 13px;
+    margin: 1px auto;
+  }
+
+  .saved-stations-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .weekly-summary-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .telemetry-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
   }
 
   /* Alerts Small Mobile Layout */
@@ -4514,6 +4743,33 @@ body.nav-drawer-open {
 
   .threshold-card {
     padding: 10px 8px;
+  }
+}
+
+/* ==========================================================================
+   BREAKPOINT 7: ULTRA-NARROW MOBILE (320px to 359px)
+   ========================================================================== */
+@media (max-width: 359px) {
+  .global-city-selector-wrap {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px;
+  }
+
+  .city-selector-box {
+    grid-column: 1;
+  }
+
+  .topbar-fav-btn {
+    grid-column: 2;
+  }
+
+  .station-selector-box {
+    grid-column: 1 / -1;
+  }
+
+  .weekly-bars-container {
+    gap: 4px;
+    height: 150px;
   }
 }
 
@@ -5039,16 +5295,20 @@ body.nav-drawer-open {
   background: white;
   border: 1px solid #dce7db;
   border-radius: 10px;
-  width: 40px;
-  height: 40px;
+  width: 42px;
+  height: 42px;
+  min-width: 42px;
+  min-height: 42px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 20px;
+  font-size: 19px;
   color: #8fa093;
   cursor: pointer;
   transition: all 0.2s ease;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+  flex-shrink: 0;
+  box-sizing: border-box;
 }
 
 .topbar-fav-btn:hover {
@@ -5988,7 +6248,7 @@ body.nav-drawer-open {
 
 .saved-stations-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
   gap: 18px;
 }
 
@@ -6149,7 +6409,7 @@ body.nav-drawer-open {
 
 .weekly-summary-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
   gap: 18px;
 }
 

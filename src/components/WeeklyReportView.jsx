@@ -27,7 +27,7 @@ export default function WeeklyReportView({
           <h2>Weekly Air Quality Audit Report</h2>
           <p>
             Retrospective 7-day particulate exposure analysis for {currentStation.name} based on authentic ground-monitoring observations.
-            CPCB NAAQS 24-hour compliance is evaluated only for days meeting defensible coverage criteria (≥16h/day).
+            CPCB NAAQS 24-hour compliance (60 µg/m³) is evaluated only for days meeting the application-defined data completeness criterion (≥16h/day).
           </p>
         </div>
 
@@ -209,7 +209,7 @@ export default function WeeklyReportView({
                 <p className="stat-desc">
                   {report.summary.evaluableDaysCount > 0
                     ? `Days with ≥16h data and mean ≤60 µg/m³. Exceedances: ${report.summary.exceedanceDaysCount}.`
-                    : 'No calendar days had ≥16h diurnal coverage required for CPCB 24-hr evaluation.'}
+                    : 'No calendar days met the application-defined ≥16h diurnal coverage required for 24-hr evaluation against CPCB standards.'}
                   {report.summary.insufficientDaysCount > 0 && (
                     <span> ({report.summary.insufficientDaysCount} incomplete day(s) labeled Insufficient Data).</span>
                   )}
@@ -320,7 +320,7 @@ export default function WeeklyReportView({
             <h4>⚖ Scientific Integrity & Regulatory Scope Notice</h4>
             <p>
               {report.regulatoryNotice} Physical particulate mass concentration is compiled from OpenAQ ground observations.
-              Missing days are never imputed, interpolated, or replaced with synthetic values. Per CPCB scientific criteria, incomplete days (&lt;16 hours) are labeled Insufficient Data rather than compliant or non-compliant.
+              Missing days are never imputed, interpolated, or replaced with synthetic values. Under BreatheWise application criteria, incomplete days (&lt;16 hours) are labeled Insufficient Data rather than compliant or non-compliant.
             </p>
           </div>
         </>

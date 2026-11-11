@@ -349,7 +349,7 @@ export default function AlertsView({
             </p>
           </div>
           <div className="protocol-notice-box">
-            <strong>Scientific Integrity Rule:</strong> CPCB NAAQS standards require representative temporal coverage spanning at least 16 distinct hours across at least 3 of 4 diurnal quadrants. BreatheWise strictly adheres to these benchmarks and does not extrapolate or generate speculative alerts from sparse or clustered data.
+            <strong>Scientific Integrity Rule:</strong> To ensure scientific integrity when assessing compliance against CPCB NAAQS 24-hour standards (60 µg/m³), BreatheWise enforces an application-defined representative temporal coverage criterion requiring at least 16 distinct hours across at least 3 of 4 diurnal quadrants. BreatheWise strictly adheres to these benchmarks and does not extrapolate or generate speculative alerts from sparse or clustered data.
           </div>
         </div>
       ) : (

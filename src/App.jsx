@@ -704,6 +704,7 @@ export default function App() {
 
             {/* Station dropdown if multiple stations exist in the city, or display the station name */}
             <div className="station-selector-box">
+              <span className="location-pin-icon">📡</span>
               <div className="station-select-field">
                 <label htmlFor="stationSelect" className="selector-label">MONITORING SITE:</label>
                 {stationsInCurrentCity.length > 1 ? (
@@ -1337,7 +1338,7 @@ export default function App() {
           <CompareView
             nowTimestamp={now}
             activeStationId={selectedLocationId}
-          />
+/>
         )}
 
         {activeNav === 'alerts' && (

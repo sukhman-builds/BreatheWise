@@ -8,7 +8,7 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "node --test tests/pm25Standards.test.js tests/stationsConfig.test.js tests/smartAlerts.test.js tests/apiClient.test.js tests/apiReliability.test.js tests/cleanAirWindow.test.js tests/dataReliability.test.js tests/leaderboard.test.js tests/favorites.test.js tests/weeklyReport.test.js server/test-server.js"
+    "test": "node --test tests/pm25Standards.test.js tests/stationsConfig.test.js tests/smartAlerts.test.js tests/apiClient.test.js tests/apiReliability.test.js tests/cleanAirWindow.test.js tests/dataReliability.test.js tests/leaderboard.test.js tests/favorites.test.js tests/weeklyReport.test.js tests/preSubmissionAudit.test.js server/test-server.js"
   },
   "dependencies": {
     "leaflet": "^1.9.4",
