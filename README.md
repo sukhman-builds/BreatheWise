@@ -1,236 +1,242 @@
-# BreatheWise 🌿
+# BreatheWise
 
-> **Evidence-Based Ambient Air Quality Intelligence & Station Comparison System**  
-> Ground-station observations from **OpenAQ v3**; model-based forecasts from **Open-Meteo/CAMS**.
+BreatheWise is a web dashboard for exploring ambient air-quality observations and forecasts for a curated set of monitoring stations in northern India. It brings station readings, historical measurements, location comparisons, health context, and forecast summaries into one interface while distinguishing measured data from model output.
 
-[![React](https://img.shields.io/badge/React-19.3-61dafb.svg)](https://react.dev/)
-[![Vite](https://img.shields.io/badge/Vite-8.3-646cff.svg)](https://vitejs.dev/)
-[![Express](https://img.shields.io/badge/Express-5.3-000000.svg)](https://expressjs.com/)
-[![OpenAQ](https://img.shields.io/badge/OpenAQ-v3_API-00897b.svg)](https://openaq.org/)
-[![Open-Meteo](https://img.shields.io/badge/Forecast-Open--Meteo-00a6a6.svg)](https://open-meteo.com/)
-[![Leaflet](https://img.shields.io/badge/Leaflet-1.9-199900.svg)](https://leafletjs.com/)
+## The problem it addresses
 
----
+Air-quality numbers are easy to misread: a PM2.5 mass concentration is not itself an Air Quality Index, a single sensor observation is not a 24-hour mean, and a model forecast is not a ground measurement. BreatheWise presents those data types with their source, timestamps, coverage, and limitations so users can make more informed comparisons without treating incomplete or stale data as current.
 
-## 📌 Executive Summary
+## Implemented features
 
-**BreatheWise** is an ambient air quality monitoring and comparative analytics application designed with strict scientific and data integrity standards. It presents ground-station observations from OpenAQ v3 separately from model-based forecasts provided by Open-Meteo's CAMS-based air quality forecast.
+- **Station dashboard and selection:** Switch among 15 configured monitoring stations in 9 cities. The overview shows the latest available pollutant readings, PM2.5 context, sensor measurement time, proxy fetch time, and stale-data status.
+- **Pollutant readings:** Displays available PM2.5, PM10, NO₂, SO₂, CO, and O₃ readings. Values depend on which sensors report data at a station.
+- **Station comparison:** Compare two configured stations, including available PM2.5 readings, historical summaries, timestamps, and pollutant measurements.
+- **Historical trends:** Explore recent PM2.5 readings or up to seven days of station history, with averages, minimums, maximums, and an observation timeline.
+- **Monitoring map:** Browse configured stations on a Leaflet map, filter by city, and select a station. The map also shows the 25 km Ambala discovery area; the backend can query OpenAQ for stations in that area.
+- **Health and standards reference:** Provides general and sensitive-group guidance and an Indian CPCB PM2.5 24-hour NAAQS reference. The information is advisory, not medical advice.
+- **Air-quality forecast:** Shows hourly forecast PM2.5, PM10, and US AQI values for the selected station's coordinates. Forecast values are clearly identified as model output.
+- **Clean-air window:** Uses available forecast PM2.5 values to identify a recommended three-hour outdoor-activity window. This is a forecast-based suggestion, not a guarantee of conditions.
+- **Smart alerts:** Evaluates representative rolling 24-hour ground-station PM2.5 data against the 60 µg/m³ CPCB 24-hour reference. It requires sufficient temporal coverage, suppresses stale observations, and maintains station-specific alert history in browser storage.
+- **PM2.5 city leaderboard:** Ranks cities by the latest available instantaneous PM2.5 ground-station concentration from each city's configured default station. This is not an official AQI ranking or a ranking of regulatory 24-hour NAAQS categories; stale and unreported cities are identified rather than treated as current values.
+- **Saved locations:** Bookmark stations for quick access. Favorites are stored in the browser's `localStorage`; there is no account or cloud sync.
+- **Weekly report:** Summarizes the selected station's available seven-day PM2.5 history, including daily coverage and cleanest/most polluted day summaries. Its minimum of 16 distinct observation hours per day is an application-defined data-quality rule for deciding whether a day has sufficient coverage for the application's daily category/compliance evaluation; it is not an official CPCB coverage requirement. Days below the threshold are marked insufficient rather than compliant or exceeded.
+- **Data reliability monitor:** Shows reading freshness, cache/API status, and station data availability.
+- **Resilience and transparency:** The API client and backend use in-memory caching and request deduplication. OpenAQ requests have bounded retries, and eligible cached readings can be served as explicitly stale data during upstream failures.
 
-### Core Scientific Principles:
-1. **No Fabricated Observations:** Ground observations and historical trends come from monitoring stations; forecast estimates come from a named atmospheric model and are labeled as forecasts.
-2. **PM2.5 Concentration vs. AQI Distinction:** Particulate mass concentration in micrograms per cubic meter ($\mu\text{g/m}^3$) is a physical density metric, whereas the Air Quality Index (AQI) is a mathematical non-linear composite index. BreatheWise clearly labels raw PM2.5 concentrations and references official Indian CPCB NAAQS 24-hour concentration brackets.
-3. **Dual-Timestamp Integrity:** Explicit separation between when a physical sensor recorded an observation and when BreatheWise fetched/cached it from OpenAQ.
-4. **Forecast Transparency:** Open-Meteo/CAMS output is identified as model-based, not a ground-station observation. Its US AQI values, when available, are not Indian CPCB AQI readings.
+## PM2.5 concentration and AQI are different
 
----
+PM2.5 in µg/m³ is a particulate mass concentration. AQI is an index calculated using a defined methodology; the application does not calculate or claim to report an official CPCB AQI. CPCB NAAQS PM2.5 concentration categories and the 60 µg/m³ 24-hour reference are contextual standards, not an AQI conversion for an isolated reading.
 
-## 🏗 System Architecture & Supported Stations
+The overview may label a single observation with a concentration-based snapshot category, but it is not a regulatory 24-hour result. The city leaderboard sorts latest instantaneous PM2.5 concentrations, not AQI values or regulatory 24-hour NAAQS categories. The alert and weekly-report modules separately apply application coverage rules to historical measurements; the weekly report's 16-hour rule is not an official CPCB requirement. Open-Meteo's `us_aqi`, when present, is the US index and must not be interpreted as Indian CPCB AQI.
 
-### Technology Stack
-- **Frontend:** React 19 and Vite 8; React Leaflet 5 with Leaflet 1.9 for interactive maps.
-- **Observation data:** OpenAQ v3 ground-station API.
-- **Forecast data:** Open-Meteo Air Quality API with a CAMS-based forecast.
-- **Backend:** Express 5.3 on Node.js >= 20, serving as the data API proxy.
+## Data sources and limitations
 
-### Backend Architecture
-- **Framework:** Express 5.3 (Node.js >= 20)
-- **API Proxy:** In-memory caching (5-min for air quality, 15-min for historical measurements, 60-min for locations/sensors) with in-flight request deduplication to prevent rate limits.
-- **Port Conflict Handling:** Gracefully detects `EADDRINUSE` errors on port 5000 and outputs actionable instructions.
-- **Error Codes:** Structured JSON responses (`RATE_LIMITED`, `INVALID_ID`, `GATEWAY_TIMEOUT`, `UPSTREAM_AUTH_ERROR`, `NOT_FOUND`).
+- **OpenAQ v3:** The backend retrieves monitoring-location metadata, sensor lists, latest observations, historical measurements, and nearby Ambala stations. The frontend and backend station catalogs are curated configurations, not a complete directory of all monitoring sites.
+- **Open-Meteo Air Quality API:** The backend requests hourly `pm2_5`, `pm10`, and `us_aqi` values from its CAMS-based air-quality forecast for the selected coordinates. These are model estimates, not station readings.
+- **Map tiles:** The map uses OpenStreetMap tiles.
 
-The frontend's curated station configuration contains **15 stations across 9 cities**. A city can have multiple selectable stations:
+Coverage and freshness vary by station, pollutant, and upstream provider. Missing data remains unavailable rather than being inferred as zero. The dashboard flags observations older than three hours as stale. The backend's in-memory cache can provide eligible stale OpenAQ or forecast responses for up to 24 hours after their cache entry was stored; a stale response is not a live reading. Backend cache entries are not persistent across process restarts.
 
-| City | Configured stations |
-|---|---:|
-| Ambala | 1 |
-| Amritsar | 1 |
-| Chandigarh | 3 |
-| Faridabad | 1 |
-| Gurugram | 1 |
-| Jaipur | 3 |
-| Ludhiana | 1 |
-| New Delhi | 2 |
-| Noida | 2 |
+Historical retrieval is limited to the preceding seven days and at most 1,000 measurements per request. City rankings cover only the configured cities and rely on available station observations. Forecast availability and accuracy depend on Open-Meteo and the model's spatial and temporal coverage. Neither forecasts nor health guidance replace official monitoring, professional advice, or emergency instructions.
 
-For example, New Delhi includes OpenAQ location `8118` (New Delhi / US Diplomatic Post; PM2.5 sensor `23534`) and location `17` (R K Puram, Delhi - DPCC). Ambala includes location `6964` (Patti Mehar, Ambala - HSPCB; PM2.5 sensor `14258997`). These are entries in the fixed selector catalog. The separate Ambala discovery endpoint also queries OpenAQ for nearby stations within 25 km.
+## Technology
 
----
+- **Frontend:** React 19, JavaScript/JSX, Vite 8
+- **Mapping:** React Leaflet 5 and Leaflet 1.9
+- **Backend:** Node.js 20 or later, Express 5, CORS, dotenv
+- **Data services:** OpenAQ v3 and Open-Meteo Air Quality API
+- **Tests:** Node.js built-in test runner (`node:test`)
+- **Deployment configuration:** Render (`render.yaml`) and Vercel (`vercel.json`)
 
-## 🚀 Key Features & Implementation Breakdown
+## Architecture and project structure
 
-### 1. Multi-City & Multi-Station Selection
-- Select among the **15 configured stations in 9 cities** using the city and station controls; station-dependent views update for the selected location.
-- `GET /api/ambala-stations` queries OpenAQ v3 for monitoring stations within a 25 km radius of Ambala (`coordinates=30.378,76.776&radius=25000&parameters_id=2`).
+The Vite frontend calls the Express API. The backend keeps the OpenAQ API key server-side, proxies OpenAQ and Open-Meteo requests, and adds validation, caching, retry handling, and response metadata. Browser-side utilities compute presentation summaries, alert eligibility, weekly reports, and saved-location state.
 
-### 2. Side-by-Side Station Comparison (`⇄ Compare Cities`)
-- Choose any two different stations from the configured catalog, including stations in the same or different cities.
-- Compare PM2.5 concentrations ($\mu\text{g/m}^3$), available historical 24-hour summaries, sensor timestamps, and the difference between readings.
-- Multi-pollutant breakdown: PM2.5, PM10, $\text{NO}_2$, $\text{SO}_2$, $\text{CO}$, and $\text{O}_3$.
+```text
+.
++-- public/
+|   +-- favicon.svg
+|   `-- icons.svg
++-- server/
+|   +-- .env.example
+|   +-- index.js
+|   +-- package.json
+|   +-- package-lock.json
+|   +-- stations.js
+|   `-- test-server.js
++-- src/
+|   +-- api/
+|   |   `-- client.js
+|   +-- assets/
+|   |   +-- hero.png
+|   |   +-- react.svg
+|   |   `-- vite.svg
+|   +-- components/
+|   |   +-- AlertsView.jsx
+|   |   +-- CleanAirWindow.jsx
+|   |   +-- CompareView.jsx
+|   |   +-- ForecastView.jsx
+|   |   +-- HealthView.jsx
+|   |   +-- LeaderboardView.jsx
+|   |   +-- MapView.jsx
+|   |   +-- MyLocationsView.jsx
+|   |   +-- ReliabilityView.jsx
+|   |   +-- TrendsView.jsx
+|   |   `-- WeeklyReportView.jsx
+|   +-- config/
+|   |   `-- stations.js
+|   +-- utils/
+|   |   +-- cleanAirWindow.js
+|   |   +-- dataReliability.js
+|   |   +-- favorites.js
+|   |   +-- leaderboard.js
+|   |   +-- pm25Standards.js
+|   |   +-- smartAlerts.js
+|   |   `-- weeklyReport.js
+|   +-- App.css
+|   +-- App.jsx
+|   +-- config.js
+|   +-- index.css
+|   `-- main.jsx
++-- tests/
+|   +-- apiClient.test.js
+|   +-- apiReliability.test.js
+|   +-- cleanAirWindow.test.js
+|   +-- dataReliability.test.js
+|   +-- favorites.test.js
+|   +-- leaderboard.test.js
+|   +-- pm25Standards.test.js
+|   +-- smartAlerts.test.js
+|   +-- stationsConfig.test.js
+|   `-- weeklyReport.test.js
++-- .env.example
++-- .gitignore
++-- README.md
++-- eslint.config.js
++-- index.html
++-- package.json
++-- package-lock.json
++-- render.yaml
++-- vercel.json
+`-- vite.config.js
+```
 
-### 3. Advanced Historical Trends & Analytics (`▤ Historical Trends`)
-- Toggle between **Latest 24 Readings** (hourly resolution) and **7-Day Historical Trend** (full dataset up to 1,000 measurements).
-- Summary statistics: Current Reading, Period Average, Minimum, and Maximum.
-- Interactive color-coded bars mapped directly to Indian CPCB NAAQS particulate concentration brackets (Good, Satisfactory, Moderate, Poor, Very Poor, Severe).
-- Interactive hover tooltips displaying exact timestamp, concentration value, unit, and category.
-
-### 4. Interactive Geospatial Map (`⌖ Air Quality Map`)
-- Built with React Leaflet.
-- Displays all 15 configured ground-monitoring stations across 9 cities with custom pins; filter the station list by city.
-- Visualizes the 25 km discovery perimeter around Ambala as a dashed geodesic circle.
-- Interactive popups featuring available PM2.5 values, coordinates, operator details, and a station-selection action.
-
-### 5. Evidence-Based Health & Safety Guidance (`♡ Health & Safety`)
-- Dynamic health risk assessment based on the active station's PM2.5 concentration level.
-- Categorized recommendations for:
-  - **General Population:** Outdoor workout timings, residential ventilation windows, cabin recirculation.
-  - **Sensitive Groups:** Children, elderly individuals, asthma/COPD patients, cardiac risk mitigation.
-  - **Physical Protective Interventions:** Certified N95/FFP2 respirators (explaining why surgical/cloth masks fail against PM2.5), True HEPA air filtration with CADR sizing, avoidance of indoor combustion sources.
-- Complete Indian CPCB NAAQS 24-hr concentration reference table.
-- Strict regulatory & medical disclaimer.
-
-### 6. Model-Based Air Quality Forecast (`☼ Forecast`)
-- Requests hourly PM2.5, PM10, and US AQI values from the Open-Meteo Air Quality API, which provides a CAMS-based forecast for the selected station's coordinates.
-- Displays available future hours for the next 24 hours, with next-hour values, hourly charts, forecast location, IST timezone, and retrieval time.
-- Clearly labels these as model estimates rather than ground-station measurements. Forecast availability depends on the upstream service and valid station coordinates.
-- US AQI is shown where supplied by the forecast and is **not** Indian CPCB AQI; forecast PM concentrations are not observations or official CPCB readings.
-
-### 7. Smart AQI Alerts (`🔔 Smart Alerts`)
-- Evaluates the representative rolling 24-hour **ground-station PM2.5 average** against the CPCB NAAQS reference threshold of **60 µg/m³**. A BreatheWise advisory is generated only when that average is greater than 60 µg/m³; a single hourly reading does not trigger it.
-- BreatheWise advisory severity tiers are based on that average: **Moderate** (>60–90), **Poor** (>90–120), **Very Poor** (>120–250), and **Severe** (>250 µg/m³). These are BreatheWise advisory tiers, **not official CPCB AQI categories**.
-- Uses observations from the preceding 24 hours and requires at least 16 valid observations, 16 distinct hours, a time span of at least 18 hours, and coverage of at least 3 of 4 six-hour periods. Partial/provisional or clustered coverage is not enough to issue an alert.
-- Suspends alert evaluation when the latest observation is more than 3 hours old. Missing history, insufficient temporal coverage, an unavailable PM2.5 sensor, or an API failure with no usable history is shown as a separate non-alert status; the app does not infer a value or issue a speculative alert.
-- Alert history is station-specific and stored in browser `localStorage`. Identical station/severity/observation-time events are deduplicated; history is capped at 50 entries and supports dismiss/restore and clear-history actions.
-- This is an informational exposure advisory, not an official CPCB AQI result, emergency declaration, or medical advice.
-
-### 8. Dual Timestamp Transparency & Stale-Data Detection
-- Displays two distinct timestamps for every reading:
-  - **Measured by Sensor:** Local timestamp (IST) when the physical ground monitor sampled the air.
-  - **Fetched from OpenAQ:** Timestamp when the BreatheWise proxy retrieved and cached the response.
-- **Stale Data Warning:** Automatically flags measurements older than 3 hours with a prominent warning badge.
-- **Rate-Limit Resilience:** In-memory caching (200-entry max, TTL-based) and automatic 30-second countdown retry banner upon HTTP 429 status.
-
----
-
-## 🛠 Local Setup & Running Instructions
+## Local setup
 
 ### Prerequisites
-- **Node.js** >= 20.x
-- **npm** >= 10.x
-- OpenAQ API Key (Get a free key at [openaq.org](https://openaq.org/))
 
-### 1. Clone & Install Dependencies
+- Node.js 20 or later (the backend package requires `node >=20`)
+- npm
+- An OpenAQ API key for OpenAQ-backed API requests
 
-```bash
-# Clone the repository
-cd Breathbettter
+### Install and configure
 
-# Install frontend dependencies
+From the repository root, install both packages and create local environment files from the checked-in templates:
+
+```powershell
 npm install
-
-# Install backend dependencies
-cd server
-npm install
-cd ..
+npm --prefix server install
+Copy-Item .env.example .env
+Copy-Item server\.env.example server\.env
 ```
 
-### 2. Configure Environment Variables
+Set the OpenAQ key in `server\.env` locally. Do not commit either `.env` file or put the OpenAQ key in a frontend variable. The root `.env` is for the Vite frontend; `server\.env` is read by the backend.
 
-**Backend (`server/.env`):**
-```env
-PORT=5000
-OPENAQ_API_KEY=your_openaq_api_key_here
-CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
-OPENAQ_TIMEOUT_MS=10000
-```
+### Environment variables
 
-**Frontend (`.env`):**
-```env
-VITE_API_BASE_URL=http://localhost:5000
-```
+| Variable | Used by | Purpose |
+|---|---|---|
+| `VITE_API_BASE_URL` | Frontend | Backend API base URL. If unset, the frontend uses `http://localhost:5000`. |
+| `OPENAQ_API_KEY` | Backend | API key sent by the server to OpenAQ v3. Required for OpenAQ-backed requests. |
+| `PORT` | Backend | HTTP listen port; defaults to `5000` when unset. |
+| `CORS_ORIGINS` | Backend | Comma-separated browser origins permitted by CORS. Set this to the deployed frontend origin in production. |
+| `OPENAQ_TIMEOUT_MS` | Backend | Timeout for OpenAQ requests in milliseconds; the server defaults to 15,000 ms if unset. The checked-in backend template and Render blueprint set it to 10,000 ms. |
 
-### 3. Launch Development Servers
+The Render blueprint also configures `NODE_VERSION` and supplies a value for `OPENAQ_TIMEOUT_MS`. Keep secret values in local environment files or the hosting provider's secret/environment settings; never put API keys in client-side variables.
 
-**Start Backend (Port 5000):**
-```bash
+### Run the application
+
+Start the backend in one terminal:
+
+```powershell
 cd server
 npm run dev
 ```
 
-**Start Frontend (Port 5173):**
-```bash
-# In a separate terminal at the project root:
+Start the frontend from the repository root in another terminal:
+
+```powershell
 npm run dev
 ```
 
-Open your browser at `http://localhost:5173`.
+Open the local Vite URL shown in the terminal (normally `http://localhost:5173`). The backend health endpoint is available at `http://localhost:5000/api/health`.
 
-### 4. Run Lint, Build & Automated Tests
+For a production-mode backend process, run `npm start` from `server`. To serve a local production frontend build, run `npm run build` and then `npm run preview` from the repository root.
 
-```bash
-# Run ESLint
+## Backend API
+
+All routes below are implemented in `server/index.js` and use `GET`.
+
+| Endpoint | Behavior |
+|---|---|
+| `/api/health` | Backend health, timestamp, and a boolean indicating whether an OpenAQ key is configured. |
+| `/api/stations` | Curated station and city catalog. |
+| `/api/stations?city=<city>` | Curated stations for the requested city. |
+| `/api/location/:locationId` | OpenAQ location metadata and coordinates, with configured-catalog fallback where available. |
+| `/api/location-sensors/:locationId` | Sensor IDs and parameter/unit metadata for an OpenAQ location. |
+| `/api/air-quality/:locationId` | Latest available sensor observation per pollutant for a location, plus fetch/stale metadata. |
+| `/api/history/:sensorId` | Valid measurements for the preceding seven days (request limit 1,000). |
+| `/api/ambala-stations` | OpenAQ location discovery for PM2.5 monitors within 25 km of the configured Ambala reference point. |
+| `/api/forecast?latitude=<lat>&longitude=<lon>` | Open-Meteo hourly PM2.5, PM10, and US AQI forecast for valid coordinates. |
+
+Invalid IDs or coordinates return structured JSON errors; unknown `/api` routes return a JSON 404. OpenAQ-backed routes require the backend key, while the station catalog, health check, and Open-Meteo forecast have their own route behavior.
+
+## Tests, lint, and build
+
+Run these commands from the repository root:
+
+```powershell
+npm test
 npm run lint
-
-# Run Vite production build
 npm run build
+```
 
-# Run all declared automated tests from the repository root
-npm test
+- `npm test` runs the listed Node tests for API-client behavior, data reliability, PM2.5 standards, station configuration, alerts, favorites, leaderboards, clean-air windows, and weekly reports. It also runs `server/test-server.js`, which exercises backend routes including OpenAQ-backed requests; those integration cases need network access and a working backend OpenAQ key.
+- `npm run lint` runs `eslint .` using the root ESLint configuration for frontend and server JavaScript.
+- `npm run build` runs `vite build` to create the production frontend in `dist/`.
 
-# Optionally run the backend test suite by itself
+The backend package also defines `npm test` (`node --test`), which runs `server/test-server.js`; this is the same backend test file included in the root test script. To run that package's test command separately:
+
+```powershell
 cd server
 npm test
 ```
 
-The root `npm test` script uses Node's built-in test runner for PM2.5 standards and temporal-coverage utilities, station configuration and lookups, Smart Alerts thresholds/coverage/staleness/error handling/history, and backend health/catalog/location/air-quality/cache/API response behavior. The tests do not certify forecast accuracy.
+## Deployment
 
----
+There is no production application URL hard-coded in the repository configuration. Deployments use the hosting providers' generated URLs.
 
-## 🚢 Deployment Guide
+### Backend on Render
 
-### A. Backend Deployment on Render
-1. Create a **New Web Service** on [Render.com](https://render.com/).
-2. Select your repository.
-3. Configure the service settings:
-   - **Root Directory:** `server`
-   - **Runtime:** `Node`
-   - **Build Command:** `npm install`
-   - **Start Command:** `npm start`
-   - **Health Check Path:** `/api/health`
-4. Set Environment Variables in Render:
-   - `OPENAQ_API_KEY`: *Your OpenAQ API Key*
-   - `CORS_ORIGINS`: *Your Vercel frontend URL (e.g. `https://breathewise.vercel.app`)*
-   - `NODE_VERSION`: `20`
-5. Note your deployed Render backend URL (e.g. `https://breathewise-api.onrender.com`).
+The [Render blueprint](./render.yaml) defines a Node web service rooted at `server`, with `npm install` as its build command, `npm start` as its start command, and `/api/health` as its health check. It declares `OPENAQ_API_KEY` and `CORS_ORIGINS` as values to supply in Render, and configures `PORT`, `NODE_VERSION`, and `OPENAQ_TIMEOUT_MS`. Set `CORS_ORIGINS` to the exact deployed frontend origin and keep the OpenAQ key in Render's environment settings.
 
-*(Or use the included `render.yaml` blueprint for one-click deployment).*
+See [Render](https://render.com/) to create or deploy the service.
 
-### B. Frontend Deployment on Vercel
-1. Import your repository into [Vercel](https://vercel.com/).
-2. Framework Preset: **Vite**.
-3. Set the Environment Variable:
-   - `VITE_API_BASE_URL`: `https://your-backend-app.onrender.com`
-4. Deploy! The included `vercel.json` automatically manages single-page application (SPA) routing rewrites and security headers.
+### Frontend on Vercel
 
----
+The [Vercel configuration](./vercel.json) declares the Vite framework, rewrites application routes to `/` for the single-page app, and adds response security headers. Deploy the repository root as the Vite project and set `VITE_API_BASE_URL` to the deployed backend's base URL in the Vercel project environment.
 
-## 🎬 Hackathon Evaluator Demo Script
+See [Vercel](https://vercel.com/) to deploy the frontend.
 
-Follow this step-by-step walkthrough to demonstrate BreatheWise during evaluation:
+## Known limitations and possible future scope
 
-| Step | Action | What to Observe / Demonstrate |
-| :--- | :--- | :--- |
-| **1. Startup & Health** | Open `http://localhost:5000/api/health` | Backend responds with `{ status: "success", hasApiKey: true }`. Demonstrate that port conflicts are intercepted safely. |
-| **2. Overview & Timestamps** | Open `http://localhost:5173` | Point out the **Current Air Quality** card. Highlight the **Dual Timestamps**: *"Measured by Sensor"* (IST local time + relative age) vs. *"Fetched from OpenAQ"*. Point out the PM2.5 concentration level mapped to CPCB NAAQS standards. |
-| **3. City & Station Switcher** | In the topbar, choose a city and station, such as **Ambala** / **Patti Mehar** | Notice the station-specific dashboard update. Location `6964` is the configured Patti Mehar, Ambala - HSPCB station. The selector supports 15 configured stations across 9 cities. |
-| **4. Station Comparison** | Click **⇄ Compare Cities** in the sidebar | Select any two different configured stations. Review the **Difference Analysis**, coordinates, monitoring agencies, sensor times, and multi-pollutant comparison. Highlight that PM2.5 concentration is not the same as AQI. |
-| **5. Historical Trends** | Click **▤ Historical Trends** in the sidebar | Switch between the **Latest 24 Readings** and **7-Day History**. Hover over chart bars to show interactive tooltips with timestamps and NAAQS threshold bands. Review the statistical summary (Average, Min, Max). |
-| **6. Interactive Map** | Click **⌖ Air Quality Map** in the sidebar | Show the configured station markers, filter the station list by city, and select a station from its popup. Note the 25 km dashed discovery perimeter around Ambala. |
-| **7. Evidence Health Guidance** | Click **♡ Health & Safety** in the sidebar | Review personalized recommendations for the General Population, Sensitive Groups, and Protective Interventions (N95 respirators vs cloth masks, HEPA air purifiers). Inspect the full CPCB NAAQS standard table. |
-| **8. Forecast** | Click **☼ Forecast** in the sidebar | Review the Open-Meteo/CAMS-based hourly forecast for the selected station's coordinates, the next-24-hour PM2.5 and PM10 charts, and US AQI where available. Explain that these are model estimates, not ground-station observations or official CPCB AQI readings. |
-| **9. Smart Alerts** | Click **🔔 Smart Alerts** in the sidebar | Review the 60 µg/m³ rolling 24-hour PM2.5 reference, BreatheWise severity tiers, temporal coverage and stale-data safeguards, and station-specific alert history. Clarify that the tiers are not official CPCB AQI categories. |
+Current limitations include the fixed station catalog, uneven upstream sensor coverage, seven-day/1,000-measurement history limit, non-persistent server cache, and browser-local saved locations and alert history. A forecast is model output, and US AQI is not Indian CPCB AQI. The project does not provide an official AQI calculation or a substitute for official monitoring.
 
----
+Possible future work includes expanding and maintaining station coverage, adding longer-term history and durable user-synced preferences, improving forecast validation and provenance, and providing additional data-quality and accessibility improvements. These are future ideas, not current features.
 
-## 📄 License & Attribution
-- Data Source: [OpenAQ v3 API](https://openaq.org/) under Open Data Commons Attribution License.
-- Standards Reference: Central Pollution Control Board (CPCB), Ministry of Environment, Forest and Climate Change (MoEFCC), Government of India; World Health Organization (WHO) Global Air Quality Guidelines.
+## References
+
+- [OpenAQ API documentation](https://docs.openaq.org/)
+- [Open-Meteo Air Quality API documentation](https://open-meteo.com/en/docs/air-quality-api)
+- [Central Pollution Control Board](https://cpcb.nic.in/)
+- [OpenStreetMap](https://www.openstreetmap.org/) map data
